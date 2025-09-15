@@ -63,11 +63,13 @@ export class LightspeedApiClient implements LightspeedAPI {
           conversation_id === TEMP_CONVERSATION_ID
             ? undefined
             : conversation_id,
-        model: selectedModel,
-        provider: this.configApi
-          .getConfigArray('lightspeed.servers')[0]
-          .getOptionalString('id'), // Currently supports a single llm server
+        // model: selectedModel,
+        // provider: this.configApi
+        // .getConfigArray('lightspeed.servers')[0]
+        // .getOptionalString('id'), // Currently supports a single llm server
         query: prompt,
+        provider: 'RHDH-RAG',
+        model: 'llama3.1:8b',
         attachments,
       }),
     });
