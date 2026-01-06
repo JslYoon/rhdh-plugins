@@ -26,6 +26,11 @@ export interface Config {
      */
     servicePort?: number;
     /**
+     * configure the port number for the llama-stack service.
+     * @visibility backend
+     */
+    llamaStackPort?: number;
+    /**
      * customize system prompt for the lightspeed service.
      * @visibility backend
      */

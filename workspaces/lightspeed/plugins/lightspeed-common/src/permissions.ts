@@ -56,6 +56,61 @@ export const lightspeedChatUpdatePermission = createPermission({
   },
 });
 /**
+ * Permission to read AI Notebook sessions
+ * @public
+ */
+export const lightspeedNotebooksSessionReadPermission = createPermission({
+  name: 'lightspeed.notebooks.session.read',
+  attributes: {
+    action: 'read',
+  },
+});
+
+/**
+ * Permission to create AI Notebook sessions
+ * @public
+ */
+export const lightspeedNotebooksSessionCreatePermission = createPermission({
+  name: 'lightspeed.notebooks.session.create',
+  attributes: {
+    action: 'create',
+  },
+});
+
+/**
+ * Permission to update AI Notebook sessions
+ * @public
+ */
+export const lightspeedNotebooksSessionUpdatePermission = createPermission({
+  name: 'lightspeed.notebooks.session.update',
+  attributes: {
+    action: 'update',
+  },
+});
+
+/**
+ * Permission to delete AI Notebook sessions
+ * @public
+ */
+export const lightspeedNotebooksSessionDeletePermission = createPermission({
+  name: 'lightspeed.notebooks.session.delete',
+  attributes: {
+    action: 'delete',
+  },
+});
+
+/**
+ * Permission to manage documents within AI Notebook sessions
+ * @public
+ */
+export const lightspeedNotebooksDocumentManagePermission = createPermission({
+  name: 'lightspeed.notebooks.document.manage',
+  attributes: {
+    action: 'update',
+  },
+});
+
+/**
  * List of all permissions on permission polices.
  *
  * @public
@@ -65,4 +120,22 @@ export const lightspeedPermissions = [
   lightspeedChatCreatePermission,
   lightspeedChatDeletePermission,
   lightspeedChatUpdatePermission,
+  lightspeedNotebooksSessionReadPermission,
+  lightspeedNotebooksSessionCreatePermission,
+  lightspeedNotebooksSessionUpdatePermission,
+  lightspeedNotebooksSessionDeletePermission,
+  lightspeedNotebooksDocumentManagePermission,
+];
+
+/**
+ * List of all permissions on permission polices for AI Notebooks.
+ *
+ * @public
+ */
+export const lightspeedNotebooksPermissions = [
+  lightspeedNotebooksSessionReadPermission,
+  lightspeedNotebooksSessionCreatePermission,
+  lightspeedNotebooksSessionUpdatePermission,
+  lightspeedNotebooksSessionDeletePermission,
+  lightspeedNotebooksDocumentManagePermission,
 ];

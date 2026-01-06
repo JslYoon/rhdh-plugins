@@ -76,3 +76,11 @@ catalog:
     pullRequestBranchName: backstage-integration
   rules:
     - allow: [Component, System, API, Resource, Location]
+
+lightspeed:
+  servicePort: 8080
+  llamaStackPort: 8321
+  # systemPrompt: ${SYSTEM_PROMPT}
+  # mcpServers:
+  #   - name: ${MCP_SERVER_NAME}
+  #     token: ${MCP_TOKEN}

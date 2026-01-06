@@ -16,7 +16,7 @@
 
 import type { NextFunction, Request, Response } from 'express';
 
-import { QueryRequestBody } from './types';
+import { QueryRequestBody } from '../types/lightspeed-types';
 
 export const validateCompletionsRequest = (
   req: Request,
@@ -42,22 +42,6 @@ export const validateCompletionsRequest = (
       .status(400)
       .json({ error: 'query is required and must be a non-empty string' });
   }
-
-  return next();
-};
-
-export const validateLoadHistoryRequest = (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-) => {
-  const historyLength = Number(req.query.historyLength);
-
-  if (historyLength && !Number.isInteger(historyLength)) {
-    return res.status(400).send('historyLength has to be a valid integer');
-  }
-
-  // TODO: Need to extract out the user_id from conversation_id, and verify with the login user entity
 
   return next();
 };

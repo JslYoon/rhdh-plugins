@@ -19,7 +19,7 @@ import {
   createBackendPlugin,
 } from '@backstage/backend-plugin-api';
 
-import { createRouter } from './service/router';
+import { createRouter } from './router';
 
 /**
  * @public
@@ -48,9 +48,25 @@ export const lightspeedPlugin = createBackendPlugin({
           }),
         );
 
-        // allow health endpoint to be unauthenticated accessible
+        // allow health, sessions, and query endpoints to be unauthenticated accessible (for testing)
         http.addAuthPolicy({
           path: '/health',
+          allow: 'unauthenticated',
+        });
+        http.addAuthPolicy({
+          path: '/sessions',
+          allow: 'unauthenticated',
+        });
+        http.addAuthPolicy({
+          path: '/v1/query',
+          allow: 'unauthenticated',
+        });
+        http.addAuthPolicy({
+          path: '/v1/feedback',
+          allow: 'unauthenticated',
+        });
+        http.addAuthPolicy({
+          path: '/sessions/:sessionId/query',
           allow: 'unauthenticated',
         });
       },

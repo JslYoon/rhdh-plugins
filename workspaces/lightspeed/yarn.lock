@@ -7622,6 +7622,115 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@napi-rs/canvas-android-arm64@npm:0.1.84":
+  version: 0.1.84
+  resolution: "@napi-rs/canvas-android-arm64@npm:0.1.84"
+  conditions: os=android & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"@napi-rs/canvas-darwin-arm64@npm:0.1.84":
+  version: 0.1.84
+  resolution: "@napi-rs/canvas-darwin-arm64@npm:0.1.84"
+  conditions: os=darwin & cpu=arm64
+  languageName: node
+  linkType: hard
+
+"@napi-rs/canvas-darwin-x64@npm:0.1.84":
+  version: 0.1.84
+  resolution: "@napi-rs/canvas-darwin-x64@npm:0.1.84"
+  conditions: os=darwin & cpu=x64
+  languageName: node
+  linkType: hard
+
+"@napi-rs/canvas-linux-arm-gnueabihf@npm:0.1.84":
+  version: 0.1.84
+  resolution: "@napi-rs/canvas-linux-arm-gnueabihf@npm:0.1.84"
+  conditions: os=linux & cpu=arm
+  languageName: node
+  linkType: hard
+
+"@napi-rs/canvas-linux-arm64-gnu@npm:0.1.84":
+  version: 0.1.84
+  resolution: "@napi-rs/canvas-linux-arm64-gnu@npm:0.1.84"
+  conditions: os=linux & cpu=arm64 & libc=glibc
+  languageName: node
+  linkType: hard
+
+"@napi-rs/canvas-linux-arm64-musl@npm:0.1.84":
+  version: 0.1.84
+  resolution: "@napi-rs/canvas-linux-arm64-musl@npm:0.1.84"
+  conditions: os=linux & cpu=arm64 & libc=musl
+  languageName: node
+  linkType: hard
+
+"@napi-rs/canvas-linux-riscv64-gnu@npm:0.1.84":
+  version: 0.1.84
+  resolution: "@napi-rs/canvas-linux-riscv64-gnu@npm:0.1.84"
+  conditions: os=linux & cpu=riscv64 & libc=glibc
+  languageName: node
+  linkType: hard
+
+"@napi-rs/canvas-linux-x64-gnu@npm:0.1.84":
+  version: 0.1.84
+  resolution: "@napi-rs/canvas-linux-x64-gnu@npm:0.1.84"
+  conditions: os=linux & cpu=x64 & libc=glibc
+  languageName: node
+  linkType: hard
+
+"@napi-rs/canvas-linux-x64-musl@npm:0.1.84":
+  version: 0.1.84
+  resolution: "@napi-rs/canvas-linux-x64-musl@npm:0.1.84"
+  conditions: os=linux & cpu=x64 & libc=musl
+  languageName: node
+  linkType: hard
+
+"@napi-rs/canvas-win32-x64-msvc@npm:0.1.84":
+  version: 0.1.84
+  resolution: "@napi-rs/canvas-win32-x64-msvc@npm:0.1.84"
+  conditions: os=win32 & cpu=x64
+  languageName: node
+  linkType: hard
+
+"@napi-rs/canvas@npm:^0.1.65":
+  version: 0.1.84
+  resolution: "@napi-rs/canvas@npm:0.1.84"
+  dependencies:
+    "@napi-rs/canvas-android-arm64": 0.1.84
+    "@napi-rs/canvas-darwin-arm64": 0.1.84
+    "@napi-rs/canvas-darwin-x64": 0.1.84
+    "@napi-rs/canvas-linux-arm-gnueabihf": 0.1.84
+    "@napi-rs/canvas-linux-arm64-gnu": 0.1.84
+    "@napi-rs/canvas-linux-arm64-musl": 0.1.84
+    "@napi-rs/canvas-linux-riscv64-gnu": 0.1.84
+    "@napi-rs/canvas-linux-x64-gnu": 0.1.84
+    "@napi-rs/canvas-linux-x64-musl": 0.1.84
+    "@napi-rs/canvas-win32-x64-msvc": 0.1.84
+  dependenciesMeta:
+    "@napi-rs/canvas-android-arm64":
+      optional: true
+    "@napi-rs/canvas-darwin-arm64":
+      optional: true
+    "@napi-rs/canvas-darwin-x64":
+      optional: true
+    "@napi-rs/canvas-linux-arm-gnueabihf":
+      optional: true
+    "@napi-rs/canvas-linux-arm64-gnu":
+      optional: true
+    "@napi-rs/canvas-linux-arm64-musl":
+      optional: true
+    "@napi-rs/canvas-linux-riscv64-gnu":
+      optional: true
+    "@napi-rs/canvas-linux-x64-gnu":
+      optional: true
+    "@napi-rs/canvas-linux-x64-musl":
+      optional: true
+    "@napi-rs/canvas-win32-x64-msvc":
+      optional: true
+  checksum: f3a2f2323031002c784268d47ba26113201859068d79e9c5c718715adfd71b83db7fb77fcc820c530c11fc711be14b9ca082326898d7952fef2c6974593a3614
+  languageName: node
+  linkType: hard
+
 "@napi-rs/wasm-runtime@npm:^1.0.1":
   version: 1.0.3
   resolution: "@napi-rs/wasm-runtime@npm:1.0.3"
@@ -9264,11 +9373,18 @@ __metadata:
     "@red-hat-developer-hub/backstage-plugin-lightspeed-common": "workspace:^"
     "@spotify/prettier-config": ^15.0.0
     "@types/express": 4.17.25
+    "@types/js-yaml": ^4.0.9
+    "@types/multer": ^1.4.12
     "@types/supertest": 2.0.16
     express: ^4.21.1
+    form-data: ^4.0.0
     http-proxy-middleware: ^3.0.2
+    js-yaml: ^4.1.0
+    llama-stack-client: ^0.2.18
     msw: 2.12.2
+    multer: ^1.4.5-lts.1
     node-fetch: 2.7.0
+    pdfjs-dist: ^4.0.379
     prettier: 3.6.2
     supertest: 6.3.4
   languageName: unknown
@@ -12254,7 +12370,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/js-yaml@npm:^4.0.1":
+"@types/js-yaml@npm:^4.0.1, @types/js-yaml@npm:^4.0.9":
   version: 4.0.9
   resolution: "@types/js-yaml@npm:4.0.9"
   checksum: e5e5e49b5789a29fdb1f7d204f82de11cb9e8f6cb24ab064c616da5d6e1b3ccfbf95aa5d1498a9fbd3b9e745564e69b4a20b6c530b5a8bbb2d4eb830cda9bc69
@@ -12371,12 +12487,22 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/multer@npm:^1.4.13":
+"@types/multer@npm:^1.4.12, @types/multer@npm:^1.4.13":
   version: 1.4.13
   resolution: "@types/multer@npm:1.4.13"
   dependencies:
     "@types/express": "*"
   checksum: 9692a1ad5b185c86b15e852be8d6c2ba8fd85c22beffdb52cc5770bd6c0710bc904c134011949547dbd3e113899d0136a3c63fa5fc8c300be182cfdb8670de42
+  languageName: node
+  linkType: hard
+
+"@types/node-fetch@npm:^2.6.4":
+  version: 2.6.13
+  resolution: "@types/node-fetch@npm:2.6.13"
+  dependencies:
+    "@types/node": "*"
+    form-data: ^4.0.4
+  checksum: e4b4db3a8c23309dadf0beb87e88882af1157f0c08b7b76027ac40add6ed363c924e2fa275f42ae45eacf776b25ed439d14400d9d6372eb39634dd4c7e7e1ad8
   languageName: node
   linkType: hard
 
@@ -14880,7 +15006,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"busboy@npm:^1.6.0":
+"busboy@npm:^1.0.0, busboy@npm:^1.6.0":
   version: 1.6.0
   resolution: "busboy@npm:1.6.0"
   dependencies:
@@ -15713,6 +15839,18 @@ __metadata:
   version: 0.0.1
   resolution: "concat-map@npm:0.0.1"
   checksum: 902a9f5d8967a3e2faf138d5cb784b9979bad2e6db5357c5b21c568df4ebe62bcb15108af1b2253744844eb964fc023fbd9afbbbb6ddd0bcc204c6fb5b7bf3af
+  languageName: node
+  linkType: hard
+
+"concat-stream@npm:^1.5.2":
+  version: 1.6.2
+  resolution: "concat-stream@npm:1.6.2"
+  dependencies:
+    buffer-from: ^1.0.0
+    inherits: ^2.0.3
+    readable-stream: ^2.2.2
+    typedarray: ^0.0.6
+  checksum: 1ef77032cb4459dcd5187bd710d6fc962b067b64ec6a505810de3d2b8cc0605638551b42f8ec91edf6fcd26141b32ef19ad749239b58fae3aba99187adc32285
   languageName: node
   linkType: hard
 
@@ -19063,6 +19201,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"form-data-encoder@npm:1.7.2":
+  version: 1.7.2
+  resolution: "form-data-encoder@npm:1.7.2"
+  checksum: aeebd87a1cb009e13cbb5e4e4008e6202ed5f6551eb6d9582ba8a062005178907b90f4887899d3c993de879159b6c0c940af8196725b428b4248cec5af3acf5f
+  languageName: node
+  linkType: hard
+
 "form-data-encoder@npm:^1.7.2":
   version: 1.9.0
   resolution: "form-data-encoder@npm:1.9.0"
@@ -19097,6 +19242,19 @@ __metadata:
   languageName: node
   linkType: hard
 
+"form-data@npm:^4.0.4":
+  version: 4.0.5
+  resolution: "form-data@npm:4.0.5"
+  dependencies:
+    asynckit: ^0.4.0
+    combined-stream: ^1.0.8
+    es-set-tostringtag: ^2.1.0
+    hasown: ^2.0.2
+    mime-types: ^2.1.12
+  checksum: af8328413c16d0cded5fccc975a44d227c5120fd46a9e81de8acf619d43ed838414cc6d7792195b30b248f76a65246949a129a4dadd148721948f90cd6d4fb69
+  languageName: node
+  linkType: hard
+
 "form-data@npm:~2.3.2":
   version: 2.3.3
   resolution: "form-data@npm:2.3.3"
@@ -19115,7 +19273,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"formdata-node@npm:^4.3.3":
+"formdata-node@npm:^4.3.2, formdata-node@npm:^4.3.3":
   version: 4.4.1
   resolution: "formdata-node@npm:4.4.1"
   dependencies:
@@ -23334,6 +23492,21 @@ __metadata:
   languageName: node
   linkType: hard
 
+"llama-stack-client@npm:^0.2.18":
+  version: 0.2.23
+  resolution: "llama-stack-client@npm:0.2.23"
+  dependencies:
+    "@types/node": ^18.11.18
+    "@types/node-fetch": ^2.6.4
+    abort-controller: ^3.0.0
+    agentkeepalive: ^4.2.1
+    form-data-encoder: 1.7.2
+    formdata-node: ^4.3.2
+    node-fetch: ^2.6.7
+  checksum: 5cea748ab10bf110ee4d7c2792ddc51c2809a8b8e1603eb2bf3e943bd61a7557664a06e98c149d36c1e249e9b110a5280bc64d269d843977176fa2d6ef48215a
+  languageName: node
+  linkType: hard
+
 "loader-utils@npm:^1.1.0":
   version: 1.4.2
   resolution: "loader-utils@npm:1.4.2"
@@ -25394,7 +25567,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"mkdirp@npm:^0.5.6":
+"mkdirp@npm:^0.5.4, mkdirp@npm:^0.5.6":
   version: 0.5.6
   resolution: "mkdirp@npm:0.5.6"
   dependencies:
@@ -25594,6 +25767,21 @@ __metadata:
   bin:
     msw: cli/index.js
   checksum: 8ba80e1053ad6648ce4d3edc0bce6a22bc14f821723923c72154896bba33c1b7a2ae39cd4c56537de2c2cf6cbabb1e6f52cbecf17374780cb5b069721af219fa
+  languageName: node
+  linkType: hard
+
+"multer@npm:^1.4.5-lts.1":
+  version: 1.4.5-lts.2
+  resolution: "multer@npm:1.4.5-lts.2"
+  dependencies:
+    append-field: ^1.0.0
+    busboy: ^1.0.0
+    concat-stream: ^1.5.2
+    mkdirp: ^0.5.4
+    object-assign: ^4.1.1
+    type-is: ^1.6.4
+    xtend: ^4.0.0
+  checksum: b6f76a24c8fbc4d3ed5696ff8c98e126e7831d26f85e0ce17ab8d77e33a9ec14e33e4d05ea5e4e748e63a1b695cf450c2b05d8eee58484a74a1c13f459429713
   languageName: node
   linkType: hard
 
@@ -27130,6 +27318,18 @@ __metadata:
   version: 1.0.3
   resolution: "pct-encode@npm:1.0.3"
   checksum: 04344233107a40590dd2d6fff3463040288d68ec66b6026cbb90a6ab1b29afdb5f196ff35b6ab5f86d4799a0dfea6117ab19fe836e0d5ffb49695c6ba60d05d8
+  languageName: node
+  linkType: hard
+
+"pdfjs-dist@npm:^4.0.379":
+  version: 4.10.38
+  resolution: "pdfjs-dist@npm:4.10.38"
+  dependencies:
+    "@napi-rs/canvas": ^0.1.65
+  dependenciesMeta:
+    "@napi-rs/canvas":
+      optional: true
+  checksum: 64a1ceb9d647128b90fa1fe925af9c97e401c0eaf26de4af4082edaa9e6e11fa76872a27f81ff4603c57a7bc03e0b67d904a91e50e632f97ec289244f247521a
   languageName: node
   linkType: hard
 
@@ -29081,7 +29281,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"readable-stream@npm:^2.0.0, readable-stream@npm:^2.0.1, readable-stream@npm:^2.0.5, readable-stream@npm:^2.3.3, readable-stream@npm:^2.3.8, readable-stream@npm:~2.3.6":
+"readable-stream@npm:^2.0.0, readable-stream@npm:^2.0.1, readable-stream@npm:^2.0.5, readable-stream@npm:^2.2.2, readable-stream@npm:^2.3.3, readable-stream@npm:^2.3.8, readable-stream@npm:~2.3.6":
   version: 2.3.8
   resolution: "readable-stream@npm:2.3.8"
   dependencies:
@@ -32470,7 +32670,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"type-is@npm:^1.6.16, type-is@npm:^1.6.18, type-is@npm:~1.6.18":
+"type-is@npm:^1.6.16, type-is@npm:^1.6.18, type-is@npm:^1.6.4, type-is@npm:~1.6.18":
   version: 1.6.18
   resolution: "type-is@npm:1.6.18"
   dependencies:

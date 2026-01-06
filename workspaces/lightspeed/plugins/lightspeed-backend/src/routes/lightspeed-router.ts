@@ -14,11 +14,15 @@
  * limitations under the License.
  */
 
-import { MiddlewareFactory } from '@backstage/backend-defaults/rootHttpRouter';
+import type {
+  HttpAuthService,
+  LoggerService,
+  PermissionsService,
+  UserInfoService,
+} from '@backstage/backend-plugin-api';
 import { NotAllowedError } from '@backstage/errors';
-import { createPermissionIntegrationRouter } from '@backstage/plugin-permission-node';
 
-import express, { Router } from 'express';
+import { Router } from 'express';
 import { createProxyMiddleware } from 'http-proxy-middleware';
 import fetch from 'node-fetch';
 
@@ -26,117 +30,129 @@ import {
   lightspeedChatCreatePermission,
   lightspeedChatDeletePermission,
   lightspeedChatReadPermission,
-  lightspeedPermissions,
 } from '@red-hat-developer-hub/backstage-plugin-lightspeed-common';
 
-import { userPermissionAuthorization } from './permission';
+import { checkPermission, getUserRef } from '../service/auth-helpers';
+import { validateCompletionsRequest } from '../service/validation';
 import {
   DEFAULT_HISTORY_LENGTH,
   QueryRequestBody,
-  RouterOptions,
-} from './types';
-import { validateCompletionsRequest } from './validation';
+  STATIC_VECTOR_DB_ID,
+} from '../types/lightspeed-types';
 
-/**
- * @public
- * The lightspeed backend router
- */
-export async function createRouter(
-  options: RouterOptions,
-): Promise<express.Router> {
-  const { logger, config, httpAuth, userInfo, permissions } = options;
+export interface LightspeedRouterOptions {
+  logger: LoggerService;
+  httpAuth: HttpAuthService;
+  userInfo: UserInfoService;
+  permissions: PermissionsService;
+  port: number;
+  systemPrompt?: string;
+  mcpServerName?: string;
+  mcpToken?: string;
+}
+
+export function createLightspeedRouter(
+  options: LightspeedRouterOptions,
+): Router {
+  const {
+    logger,
+    httpAuth,
+    userInfo,
+    permissions,
+    port,
+    systemPrompt,
+    mcpServerName,
+    mcpToken,
+  } = options;
 
   const router = Router();
-  router.use(express.json());
 
-  const port = config.getOptionalNumber('lightspeed.servicePort') ?? 8080;
-  const system_prompt = config.getOptionalString('lightspeed.systemPrompt');
-  // Only support one MCP server for now
-  const mcpServerName = config
-    .getOptionalConfigArray('lightspeed.mcpServers')?.[0]
-    ?.getString('name');
-  const mcpToken = config
-    .getOptionalConfigArray('lightspeed.mcpServers')?.[0]
-    ?.getString('token');
-
-  router.get('/health', (_, response) => {
-    response.json({ status: 'ok' });
-  });
-
-  const permissionIntegrationRouter = createPermissionIntegrationRouter({
-    permissions: lightspeedPermissions,
-  });
-  router.use(permissionIntegrationRouter);
-
-  const authorizer = userPermissionAuthorization(permissions);
-
-  // Middleware proxy to exclude rcs POST endpoints
+  // ============================================================================
+  // Proxy Middleware - Routes all other requests to lightspeed-core server
+  // ============================================================================
   router.use('/', async (req, res, next) => {
     const passthroughPaths = ['/v1/query', '/v1/feedback'];
-    if (passthroughPaths.includes(req.path) || req.method === 'PUT') {
-      return next(); // This will skip proxying and go to POST endpoints
+    const sessionsPathPattern = /^\/sessions/;
+    if (
+      passthroughPaths.includes(req.path) ||
+      req.method === 'PUT' ||
+      sessionsPathPattern.test(req.path)
+    ) {
+      return next(); // This will skip proxying and go to POST/DELETE/GET endpoints
     }
     // TODO: parse server_id from req.body and get URL and token when multi-server is supported
-    const credentials = await httpAuth.credentials(req);
-    const user = await userInfo.getUserInfo(credentials);
-    const userEntity = user.userEntityRef;
-
-    logger.info(`receives call from user: ${userEntity}`);
     try {
+      const userEntity = await getUserRef(req, httpAuth, userInfo);
+      logger.info(`receives call from user: ${userEntity}`);
+
       if (req.method === 'GET') {
-        await authorizer.authorizeUser(
+        await checkPermission(
+          req,
           lightspeedChatReadPermission,
-          credentials,
+          httpAuth,
+          permissions,
         );
       } else if (req.method === 'DELETE') {
-        await authorizer.authorizeUser(
+        await checkPermission(
+          req,
           lightspeedChatDeletePermission,
-          credentials,
+          httpAuth,
+          permissions,
         );
       }
+
+      // Proxy middleware configuration
+      const apiProxy = createProxyMiddleware({
+        target: `http://0.0.0.0:${port}`,
+        changeOrigin: true,
+        pathRewrite: (path, _) => {
+          // Add user query parameter from the authenticated user
+          const userQueryParam = `user_id=${encodeURIComponent(userEntity)}`;
+          // Check if there are already query parameters
+          let newPath = path.includes('?')
+            ? `${path}&${userQueryParam}`
+            : `${path}?${userQueryParam}`;
+          if (
+            !path.includes('history_length') &&
+            path.includes('conversation_id')
+          ) {
+            const historyLengthQuery = `history_length=${DEFAULT_HISTORY_LENGTH}`;
+            newPath = `${newPath}&${historyLengthQuery}`;
+          }
+          logger.info(`Rewriting path from ${path} to ${newPath}`);
+          return newPath;
+        },
+      });
+      return apiProxy(req, res, next);
     } catch (error) {
       if (error instanceof NotAllowedError) {
         logger.error(error.message);
         return res.status(403).json({ error: error.message });
       }
+      throw error;
     }
-    // Proxy middleware configuration
-    const apiProxy = createProxyMiddleware({
-      target: `http://0.0.0.0:${port}`,
-      changeOrigin: true,
-      pathRewrite: (path, _) => {
-        // Add user query parameter from the authenticated user
-        const userQueryParam = `user_id=${encodeURIComponent(userEntity)}`;
-        // Check if there are already query parameters
-        let newPath = path.includes('?')
-          ? `${path}&${userQueryParam}`
-          : `${path}?${userQueryParam}`;
-        if (
-          !path.includes('history_length') &&
-          path.includes('conversation_id')
-        ) {
-          const historyLengthQuery = `history_length=${DEFAULT_HISTORY_LENGTH}`;
-          newPath = `${newPath}&${historyLengthQuery}`;
-        }
-        logger.info(`Rewriting path from ${path} to ${newPath}`);
-        return newPath;
-      },
-    });
-    return apiProxy(req, res, next);
   });
 
+  // ============================================================================
+  // Chat Endpoints - Developer Lightspeed Conversations
+  // ============================================================================
+
+  /**
+   * POST /v1/feedback
+   * Submit user feedback for a conversation
+   */
   router.post('/v1/feedback', async (request, response) => {
     try {
-      const credentials = await httpAuth.credentials(request);
-      const userEntity = await userInfo.getUserInfo(credentials);
-      const user_id = userEntity.userEntityRef;
-
+      const user_id = await getUserRef(request, httpAuth, userInfo);
       logger.info(`/v1/feedback receives call from user: ${user_id}`);
 
-      await authorizer.authorizeUser(
+      await checkPermission(
+        request,
         lightspeedChatCreatePermission,
-        credentials,
+        httpAuth,
+        permissions,
       );
+
       const userQueryParam = `user_id=${encodeURIComponent(user_id)}`;
       const requestBody = JSON.stringify(request.body);
       const fetchResponse = await fetch(
@@ -160,6 +176,7 @@ export async function createRouter(
         response.status(500).json({
           error: errormsg,
         });
+        return;
       }
 
       const data = await fetchResponse.json();
@@ -175,29 +192,41 @@ export async function createRouter(
       }
     }
   });
+
+  /**
+   * POST /v1/query
+   * Send a query to the AI assistant for developer lightspeed conversations
+   * Uses developer-specific system prompts and only static RHDH knowledge base
+   */
   router.post(
     '/v1/query',
     validateCompletionsRequest,
     async (request, response) => {
       const { provider }: Pick<QueryRequestBody, 'provider'> = request.body;
       try {
-        const credentials = await httpAuth.credentials(request);
-        const userEntity = await userInfo.getUserInfo(credentials);
-        const user_id = userEntity.userEntityRef;
-
-        logger.info(`/v1/query receives call from user: ${user_id}`);
-
-        await authorizer.authorizeUser(
-          lightspeedChatCreatePermission,
-          credentials,
+        const user_id = await getUserRef(request, httpAuth, userInfo);
+        logger.info(
+          `/v1/query (developer) receives call from user: ${user_id}`,
         );
+
+        await checkPermission(
+          request,
+          lightspeedChatCreatePermission,
+          httpAuth,
+          permissions,
+        );
+
         const userQueryParam = `user_id=${encodeURIComponent(user_id)}`;
         request.body.media_type = 'application/json'; // set media_type to receive start and end event
-        // if system_prompt is defined in lightspeed config
-        // set system_prompt to override the default rhdh system prompt
-        if (system_prompt && system_prompt.trim().length > 0) {
-          request.body.system_prompt = system_prompt;
+
+        // Apply developer lightspeed system prompt
+        if (systemPrompt && systemPrompt.trim().length > 0) {
+          request.body.system_prompt = systemPrompt;
         }
+
+        // Developer lightspeed only uses static RHDH knowledge base
+        const requestBodyTyped = request.body as QueryRequestBody;
+        requestBodyTyped.vector_store_ids = [STATIC_VECTOR_DB_ID];
 
         const requestBody = JSON.stringify(request.body);
         const mcpHeaders = mcpToken
@@ -225,6 +254,7 @@ export async function createRouter(
           response.status(500).json({
             error: errormsg,
           });
+          return;
         }
 
         // Pipe the response back to the original response
@@ -242,20 +272,25 @@ export async function createRouter(
     },
   );
 
+  /**
+   * PUT /v2/conversations/:conversation_id
+   * Update conversation metadata (e.g., topic summary)
+   */
   router.put(
     '/v2/conversations/:conversation_id',
     async (request, response) => {
       try {
-        const credentials = await httpAuth.credentials(request);
-        const userEntity = await userInfo.getUserInfo(credentials);
-        const user_id = userEntity.userEntityRef;
+        const user_id = await getUserRef(request, httpAuth, userInfo);
         const conversation_id = request.params.conversation_id;
 
-        const requestBody = JSON.stringify(request.body);
-        await authorizer.authorizeUser(
+        await checkPermission(
+          request,
           lightspeedChatCreatePermission,
-          credentials,
+          httpAuth,
+          permissions,
         );
+
+        const requestBody = JSON.stringify(request.body);
         const userQueryParam = `user_id=${encodeURIComponent(user_id)}`;
         const fetchResponse = await fetch(
           `http://0.0.0.0:${port}/v2/conversations/${conversation_id}?${userQueryParam}`,
@@ -267,6 +302,7 @@ export async function createRouter(
             body: requestBody,
           },
         );
+
         if (!fetchResponse.ok) {
           // Read the error body
           const errorBody = await fetchResponse.json();
@@ -295,8 +331,5 @@ export async function createRouter(
     },
   );
 
-  const middleware = MiddlewareFactory.create({ logger, config });
-
-  router.use(middleware.error());
   return router;
 }

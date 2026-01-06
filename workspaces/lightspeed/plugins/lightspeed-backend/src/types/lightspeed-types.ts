@@ -52,7 +52,13 @@ export interface QueryRequestBody {
 
   // System prompt to override the default value
   system_prompt?: string;
+
+  // Vector store IDs to query for RAG (e.g., ['session-abc123', 'rhdh-product-docs-1_8'])
+  vector_store_ids?: string[];
 }
 
 // default number of message history being loaded
 export const DEFAULT_HISTORY_LENGTH = 10;
+
+// Static vector DB for RHDH product documentation (always included in RAG queries)
+export const STATIC_VECTOR_DB_ID = 'rhdh-product-docs-1_8';
