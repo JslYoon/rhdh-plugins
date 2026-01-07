@@ -9377,7 +9377,6 @@ __metadata:
     "@types/multer": ^1.4.12
     "@types/supertest": 2.0.16
     express: ^4.21.1
-    form-data: ^4.0.0
     http-proxy-middleware: ^3.0.2
     js-yaml: ^4.1.0
     llama-stack-client: ^0.2.18

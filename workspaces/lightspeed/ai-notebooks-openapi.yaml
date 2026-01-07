@@ -1,0 +1,247 @@
+openapi: 3.0.3
+info:
+  title: AI Notebooks API
+  description: Session-based document management with RAG capabilities
+  version: 1.0.4
+  contact:
+    name: Red Hat Developer Hub
+    url: https://red.ht/rhdh
+  license:
+    name: Apache 2.0
+    url: https://www.apache.org/licenses/LICENSE-2.0
+
+servers:
+  - url: http://localhost:7007/api/lightspeed
+    description: Local development server
+
+tags:
+  - name: Sessions
+    description: Session management
+  - name: Documents
+    description: Document management
+  - name: Chat
+    description: RAG-powered chat
+
+paths:
+  /sessions:
+    post:
+      tags: [Sessions]
+      summary: Create session
+      operationId: createSession
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: My Knowledge Base
+                description:
+                  type: string
+                metadata:
+                  type: object
+      responses:
+        '200':
+          description: Success
+    get:
+      tags: [Sessions]
+      summary: List sessions
+      operationId: listSessions
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: tags
+          in: query
+          schema:
+            type: string
+        - name: project
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+
+  /sessions/{sessionId}:
+    get:
+      tags: [Sessions]
+      summary: Get session
+      operationId: getSession
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+    put:
+      tags: [Sessions]
+      summary: Update session
+      operationId: updateSession
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Success
+    delete:
+      tags: [Sessions]
+      summary: Delete session
+      operationId: deleteSession
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+
+  /sessions/{sessionId}/documents:
+    get:
+      tags: [Documents]
+      summary: List documents
+      operationId: listDocuments
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+    put:
+      tags: [Documents]
+      summary: Upsert document
+      operationId: upsertDocument
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title, content]
+              properties:
+                title:
+                  type: string
+                content:
+                  type: string
+      responses:
+        '200':
+          description: Success
+
+  /sessions/{sessionId}/documents/upload:
+    post:
+      tags: [Documents]
+      summary: Upload document file
+      description: |
+        Upload a file (PDF, MD, JSON, YAML). Max 20MB.
+        **IMPORTANT**: fileType must be a separate form field.
+      operationId: uploadDocument
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, fileType]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                fileType:
+                  type: string
+                  enum: [md, txt, log, json, yaml, yml, pdf]
+                  example: pdf
+                title:
+                  type: string
+      responses:
+        '200':
+          description: Success
+        '400':
+          description: Invalid request
+
+  /sessions/{sessionId}/documents/{documentId}:
+    delete:
+      tags: [Documents]
+      summary: Delete document
+      description: Returns 501 (not supported in llama-stack 0.2.x)
+      operationId: deleteDocument
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: documentId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '501':
+          description: Not implemented
+
+  /sessions/{sessionId}/query:
+    post:
+      tags: [Chat]
+      summary: Query session with RAG
+      description: Send chat query using session documents as context
+      operationId: querySession
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [query, model, provider]
+              properties:
+                query:
+                  type: string
+                  example: What does the documentation say?
+                model:
+                  type: string
+                  example: gpt-4
+                provider:
+                  type: string
+                  example: openai
+                conversation_id:
+                  type: string
+      responses:
+        '200':
+          description: Streaming response
