@@ -39,10 +39,13 @@ export async function getUserRef(
   httpAuth: HttpAuthService,
   userInfo: UserInfoService,
 ): Promise<string> {
-  return 'user:default/guest';
-  // const credentials = await httpAuth.credentials(req);
-  // const user = await userInfo.getUserInfo(credentials);
-  // return user.userEntityRef;
+  try {
+    const credentials = await httpAuth.credentials(req);
+    const user = await userInfo.getUserInfo(credentials);
+    return user.userEntityRef;
+  } catch (error) {
+    return 'user:default/guest';
+  }
 }
 
 /**

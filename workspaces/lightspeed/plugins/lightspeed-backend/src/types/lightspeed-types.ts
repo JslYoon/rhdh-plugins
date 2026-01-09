@@ -55,6 +55,15 @@ export interface QueryRequestBody {
 
   // Vector store IDs to query for RAG (e.g., ['session-abc123', 'rhdh-product-docs-1_8'])
   vector_store_ids?: string[];
+
+  // Disable safety filtering for notebook queries
+  no_shields?: boolean;
+
+  // Input shields for safety filtering (empty array disables input validation)
+  input_shields?: string[];
+
+  // Output shields for safety filtering (empty array disables output filtering)
+  output_shields?: string[];
 }
 
 // default number of message history being loaded

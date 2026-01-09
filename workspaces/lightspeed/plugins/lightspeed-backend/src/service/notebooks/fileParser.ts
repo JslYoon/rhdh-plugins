@@ -15,6 +15,7 @@
  */
 
 import * as yaml from 'js-yaml';
+import fetch from 'node-fetch';
 import * as pdfjsLib from 'pdfjs-dist';
 
 /**
@@ -28,6 +29,7 @@ export enum SupportedFileType {
   YAML = 'yaml',
   YML = 'yml',
   LOG = 'log',
+  URL = 'url',
 }
 
 export interface ParsedDocument {
@@ -36,6 +38,7 @@ export interface ParsedDocument {
     fileName: string;
     fileType: string;
     pageCount?: number;
+    url?: string;
     parseTimestamp: string;
   };
 }
@@ -174,6 +177,132 @@ async function parsePDFFile(
 }
 
 /**
+ * Strip HTML tags and extract readable text from HTML content
+ */
+function stripHtmlTags(html: string): string {
+  // Remove script and style tags and their content
+  let text = html.replace(
+    /<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi,
+    '',
+  );
+  text = text.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '');
+
+  // Remove HTML comments
+  text = text.replace(/<!--[\s\S]*?-->/g, '');
+
+  // Replace common block elements with newlines
+  text = text.replace(
+    /<\/(div|p|br|h[1-6]|li|tr|section|article|header|footer)>/gi,
+    '\n',
+  );
+
+  // Remove all remaining HTML tags
+  text = text.replace(/<[^>]+>/g, '');
+
+  // Decode common HTML entities
+  text = text.replace(/&nbsp;/g, ' ');
+  text = text.replace(/&lt;/g, '<');
+  text = text.replace(/&gt;/g, '>');
+  text = text.replace(/&amp;/g, '&');
+  text = text.replace(/&quot;/g, '"');
+  text = text.replace(/&#39;/g, "'");
+
+  // Clean up whitespace
+  text = text.replace(/\n\s*\n/g, '\n\n'); // Multiple newlines to double newline
+  text = text.replace(/[ \t]+/g, ' '); // Multiple spaces/tabs to single space
+  text = text.trim();
+
+  return text;
+}
+
+/**
+ * Parse URL and fetch web content
+ * Fetches HTML from URL and extracts readable text
+ */
+async function parseURLFile(
+  url: string,
+  fileName: string,
+  fileType: string,
+): Promise<ParsedDocument> {
+  try {
+    // Validate URL format
+    if (!isValidURL(url)) {
+      throw new Error(`Invalid URL format: ${url}`);
+    }
+
+    // Fetch the URL content
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'RHDH-Lightspeed-Bot/1.0',
+      },
+      timeout: 30000, // 30 second timeout
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `Failed to fetch URL: ${response.status} ${response.statusText}`,
+      );
+    }
+
+    // Get content type to determine how to parse
+    const contentType = response.headers.get('content-type') || '';
+
+    let content: string;
+
+    if (contentType.includes('text/html')) {
+      // HTML content - strip tags and extract text
+      const html = await response.text();
+      content = stripHtmlTags(html);
+    } else if (
+      contentType.includes('text/plain') ||
+      contentType.includes('text/markdown')
+    ) {
+      // Plain text or markdown - use as is
+      content = await response.text();
+    } else if (contentType.includes('application/json')) {
+      // JSON content - format it
+      const json = await response.json();
+      content = JSON.stringify(json, null, 2);
+    } else {
+      // Try to get as text anyway
+      content = await response.text();
+    }
+
+    // Validate we got some content
+    if (!content || content.trim().length === 0) {
+      throw new Error('No content extracted from URL');
+    }
+
+    return {
+      content,
+      metadata: {
+        fileName: fileName || new URL(url).hostname,
+        fileType,
+        url,
+        parseTimestamp: new Date().toISOString(),
+      },
+    };
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`Error fetching URL: ${error.message}`);
+    }
+    throw new Error(`Error fetching URL: ${error}`);
+  }
+}
+
+/**
+ * Validate URL format
+ */
+export function isValidURL(urlString: string): boolean {
+  try {
+    const url = new URL(urlString);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Validate file type
  */
 export function isValidFileType(fileType: string): boolean {
@@ -196,6 +325,7 @@ export function isValidFileSize(
 
 /**
  * Parse file based on its type
+ * For URL type, fileName parameter should contain the URL string
  */
 export async function parseFile(
   buffer: Buffer,
@@ -225,6 +355,10 @@ export async function parseFile(
 
     case SupportedFileType.PDF:
       return parsePDFFile(buffer, fileName, fileType);
+
+    case SupportedFileType.URL:
+      // For URL type, fileName contains the URL
+      return parseURLFile(fileName, fileName, fileType);
 
     default:
       throw new Error(`Unsupported file type: ${fileType}`);

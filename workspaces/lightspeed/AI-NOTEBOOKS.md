@@ -12,7 +12,6 @@
 - [Technical Details](#technical-details)
 
 - **[OpenAPI/Swagger Spec](./ai-notebooks-openapi.yaml)** - Interactive API documentation
-- **[CLAUDE.md](./CLAUDE.md)** - Full workspace documentation
 
 ---
 

@@ -173,11 +173,10 @@ export class SessionService {
     return updated;
   }
 
-  async deleteSession(sessionId: string, userId: string): Promise<number> {
+  async deleteSession(sessionId: string, userId: string): Promise<void> {
     const session = await this.readSession(sessionId, userId);
     await this.client.vectorDBs.unregister(session.vector_db_id);
     this.logger.info(`Session ${sessionId} deleted`);
-    return 0;
   }
 
   async listSessions(userId: string): Promise<NotebookSession[]> {

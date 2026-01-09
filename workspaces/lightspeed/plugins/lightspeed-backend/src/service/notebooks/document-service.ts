@@ -20,9 +20,6 @@ import { LlamaStackClient } from 'llama-stack-client';
 
 import { SessionDocument } from '../../types/notebooks-types';
 
-/**
- * Internal result from document upsert operation
- */
 interface UpsertResult {
   document_id: string;
   chunks_created: number;
@@ -58,9 +55,6 @@ export class DocumentService {
     );
   }
 
-  /**
-   * Split content into chunks for vector storage
-   */
   private chunkContent(content: string): string[] {
     const chunks: string[] = [];
     const words = content.split(/\s+/);
@@ -75,9 +69,6 @@ export class DocumentService {
     return chunks.length > 0 ? chunks : [content];
   }
 
-  /**
-   * Upsert a document into a session
-   */
   async upsertDocument(
     vectorDbId: string,
     title: string,
@@ -88,7 +79,6 @@ export class DocumentService {
 
     const client = new LlamaStackClient({ baseURL: this.llamaStackUrl });
 
-    // Check if document already exists
     const existingQuery = await client.vectorIo.query({
       vector_db_id: vectorDbId,
       query: documentId,
@@ -100,12 +90,9 @@ export class DocumentService {
     const replaced = existingQuery.chunks && existingQuery.chunks.length > 0;
 
     // Chunks with the same chunk_id will be overwritten on insert
-
-    // Chunk the content
     const contentChunks = this.chunkContent(content);
     this.logger.info(`Split content into ${contentChunks.length} chunks`);
 
-    // Create chunks for insertion (minimal metadata since each session has its own vector DB)
     const chunks = contentChunks.map((chunkContent, index) => {
       const chunkId = `${documentId}#chunk-${index}`;
       return {
@@ -121,7 +108,6 @@ export class DocumentService {
       };
     });
 
-    // Insert chunks
     await client.vectorIo.insert({
       vector_db_id: vectorDbId,
       chunks,
@@ -147,7 +133,6 @@ export class DocumentService {
 
     const client = new LlamaStackClient({ baseURL: this.llamaStackUrl });
 
-    // Query for all chunks in this session's vector DB
     const result = await client.vectorIo.query({
       vector_db_id: vectorDbId,
       query: 'document',
@@ -172,7 +157,7 @@ export class DocumentService {
       if (!documentMap.has(docId)) {
         documentMap.set(docId, {
           document_id: docId,
-          title: docId, // Title is the same as document ID
+          title: docId,
           session_id: sessionId,
           user_id: userId,
           content_preview:

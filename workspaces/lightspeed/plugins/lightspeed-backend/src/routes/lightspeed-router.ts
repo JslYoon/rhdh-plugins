@@ -72,7 +72,7 @@ export function createLightspeedRouter(
   // ============================================================================
   router.use('/', async (req, res, next) => {
     const passthroughPaths = ['/v1/query', '/v1/feedback'];
-    const sessionsPathPattern = /^\/sessions/;
+    const sessionsPathPattern = /^\/v1\/sessions/;
     if (
       passthroughPaths.includes(req.path) ||
       req.method === 'PUT' ||

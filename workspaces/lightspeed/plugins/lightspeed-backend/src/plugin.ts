@@ -54,19 +54,35 @@ export const lightspeedPlugin = createBackendPlugin({
           allow: 'unauthenticated',
         });
         http.addAuthPolicy({
-          path: '/sessions',
+          path: '/v1/sessions',
           allow: 'unauthenticated',
         });
         http.addAuthPolicy({
-          path: '/v1/query',
+          path: '/v1/sessions/:sessionId',
           allow: 'unauthenticated',
         });
         http.addAuthPolicy({
-          path: '/v1/feedback',
+          path: '/v1/sessions/:sessionId/documents',
           allow: 'unauthenticated',
         });
         http.addAuthPolicy({
-          path: '/sessions/:sessionId/query',
+          path: '/v1/sessions/:sessionId/documents/upload',
+          allow: 'unauthenticated',
+        });
+        http.addAuthPolicy({
+          path: '/v1/sessions/:sessionId/documents/:documentId',
+          allow: 'unauthenticated',
+        });
+        http.addAuthPolicy({
+          path: '/v1/sessions/:sessionId/query',
+          allow: 'unauthenticated',
+        });
+        http.addAuthPolicy({
+          path: '/v1/sessions/:sessionId/query',
+          allow: 'unauthenticated',
+        });
+        http.addAuthPolicy({
+          path: '/v1/sessions/:sessionId/feedback',
           allow: 'unauthenticated',
         });
       },

@@ -127,32 +127,6 @@ paths:
       responses:
         '200':
           description: Success
-    put:
-      tags: [Documents]
-      summary: Upsert document
-      operationId: upsertDocument
-      parameters:
-        - name: sessionId
-          in: path
-          required: true
-          schema:
-            type: string
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [title, content]
-              properties:
-                title:
-                  type: string
-                content:
-                  type: string
-      responses:
-        '200':
-          description: Success
-
   /sessions/{sessionId}/documents/upload:
     post:
       tags: [Documents]

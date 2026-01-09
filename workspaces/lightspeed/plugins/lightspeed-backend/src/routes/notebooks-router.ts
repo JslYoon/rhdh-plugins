@@ -43,7 +43,6 @@ import {
   parseFile,
 } from '../service/notebooks/fileParser';
 import { SessionService } from '../service/notebooks/session-service';
-import { validateCompletionsRequest } from '../service/validation';
 import {
   QueryRequestBody,
   STATIC_VECTOR_DB_ID,
@@ -84,23 +83,29 @@ export function createNotebooksRouter(options: NotebooksRouterOptions): Router {
 
   const router = Router();
 
-  // Configure multer for file uploads (memory storage)
   const upload = multer({
     storage: multer.memoryStorage(),
     limits: {
-      fileSize: 20 * 1024 * 1024, // 20MB
+      fileSize: 20 * 1024 * 1024,
     },
   });
 
-  // ============================================================================
-  // Session Management Endpoints (Notebooks/AI Sessions)
-  // ============================================================================
+  const handleError = (res: any, error: unknown, message: string) => {
+    const errormsg = `${message}: ${error}`;
+    logger.error(errormsg);
+
+    if (error instanceof NotAllowedError) {
+      res.status(403).json({ error: error.message });
+    } else {
+      res.status(500).json({ error: errormsg });
+    }
+  };
 
   /**
-   * POST /sessions
+   * POST /v1/sessions
    * Create a new session
    */
-  router.post('/sessions', async (req, res) => {
+  router.post('/v1/sessions', async (req, res) => {
     try {
       const userId = await getUserRef(req, httpAuth, userInfo);
 
@@ -133,22 +138,15 @@ export function createNotebooksRouter(options: NotebooksRouterOptions): Router {
 
       res.json(response);
     } catch (error) {
-      const errormsg = `Error creating session: ${error}`;
-      logger.error(errormsg);
-
-      if (error instanceof NotAllowedError) {
-        res.status(403).json({ error: error.message });
-      } else {
-        res.status(500).json({ error: errormsg });
-      }
+      handleError(res, error, 'Error creating session');
     }
   });
 
   /**
-   * GET /sessions/:sessionId
+   * GET /v1/sessions/:sessionId
    * Get a single session by ID
    */
-  router.get('/sessions/:sessionId', async (req, res) => {
+  router.get('/v1/sessions/:sessionId', async (req, res) => {
     try {
       const userId = await getUserRef(req, httpAuth, userInfo);
       const { sessionId } = req.params;
@@ -170,22 +168,15 @@ export function createNotebooksRouter(options: NotebooksRouterOptions): Router {
 
       res.json(response);
     } catch (error) {
-      const errormsg = `Error reading session: ${error}`;
-      logger.error(errormsg);
-
-      if (error instanceof NotAllowedError) {
-        res.status(403).json({ error: error.message });
-      } else {
-        res.status(500).json({ error: errormsg });
-      }
+      handleError(res, error, 'Error reading session');
     }
   });
 
   /**
-   * PUT /sessions/:sessionId
+   * PUT /v1/sessions/:sessionId
    * Update an existing session
    */
-  router.put('/sessions/:sessionId', async (req, res) => {
+  router.put('/v1/sessions/:sessionId', async (req, res) => {
     try {
       const userId = await getUserRef(req, httpAuth, userInfo);
       const { sessionId } = req.params;
@@ -215,22 +206,15 @@ export function createNotebooksRouter(options: NotebooksRouterOptions): Router {
 
       res.json(response);
     } catch (error) {
-      const errormsg = `Error updating session: ${error}`;
-      logger.error(errormsg);
-
-      if (error instanceof NotAllowedError) {
-        res.status(403).json({ error: error.message });
-      } else {
-        res.status(500).json({ error: errormsg });
-      }
+      handleError(res, error, 'Error updating session');
     }
   });
 
   /**
-   * DELETE /sessions/:sessionId
+   * DELETE /v1/sessions/:sessionId
    * Delete a session and all its documents
    */
-  router.delete('/sessions/:sessionId', async (req, res) => {
+  router.delete('/v1/sessions/:sessionId', async (req, res) => {
     try {
       const userId = await getUserRef(req, httpAuth, userInfo);
       const { sessionId } = req.params;
@@ -242,9 +226,7 @@ export function createNotebooksRouter(options: NotebooksRouterOptions): Router {
         permissions,
       );
 
-      // Read the session before deletion to return in response
       const session = await sessionService.readSession(sessionId, userId);
-
       await sessionService.deleteSession(sessionId, userId);
 
       const response: SessionResponse = {
@@ -255,27 +237,19 @@ export function createNotebooksRouter(options: NotebooksRouterOptions): Router {
 
       res.json(response);
     } catch (error) {
-      const errormsg = `Error deleting session: ${error}`;
-      logger.error(errormsg);
-
-      if (error instanceof NotAllowedError) {
-        res.status(403).json({ error: error.message });
-      } else {
-        res.status(500).json({ error: errormsg });
-      }
+      handleError(res, error, 'Error deleting session');
     }
   });
 
   /**
-   * GET /sessions
+   * GET /v1/sessions
    * List all sessions for the authenticated user
    */
-  router.get('/sessions', async (req, res) => {
+  router.get('/v1/sessions', async (req, res) => {
     try {
       const userId = await getUserRef(req, httpAuth, userInfo);
       const allSessions = await sessionService.listSessions(userId);
 
-      // Apply metadata filters from query parameters
       const category = req.query.category as string | undefined;
       const tagsParam = req.query.tags as string | undefined;
       const project = req.query.project as string | undefined;
@@ -312,169 +286,86 @@ export function createNotebooksRouter(options: NotebooksRouterOptions): Router {
 
       res.json(response);
     } catch (error) {
-      const errormsg = `Error listing sessions: ${error}`;
-      logger.error(errormsg);
-
-      if (error instanceof NotAllowedError) {
-        res.status(403).json({ error: error.message });
-      } else {
-        res.status(500).json({ error: errormsg });
-      }
+      handleError(res, error, 'Error listing sessions');
     }
   });
 
-  // ============================================================================
-  // Notebook Query Endpoint
-  // ============================================================================
-
   /**
-   * POST /sessions/:sessionId/query
+   * POST /v1/sessions/:sessionId/query
    * Send a query to the AI assistant for notebook/session conversations
    * Uses session-specific vector DB with uploaded documents and notebook system prompts
    */
-  router.post(
-    '/sessions/:sessionId/query',
-    validateCompletionsRequest,
-    async (req, res) => {
-      const { provider }: Pick<QueryRequestBody, 'provider'> = req.body;
-      try {
-        const userId = await getUserRef(req, httpAuth, userInfo);
-        const { sessionId } = req.params;
-
-        logger.info(
-          `/sessions/${sessionId}/query (notebook) receives call from user: ${userId}`,
-        );
-
-        await checkPermission(
-          req,
-          lightspeedChatCreatePermission,
-          httpAuth,
-          permissions,
-        );
-
-        // Verify session ownership and get vector_db_id
-        const session = await sessionService.readSession(sessionId, userId);
-
-        const userQueryParam = `user_id=${encodeURIComponent(userId)}`;
-        req.body.media_type = 'application/json';
-
-        // Apply notebook-specific system prompt
-        if (notebookSystemPrompt && notebookSystemPrompt.trim().length > 0) {
-          req.body.system_prompt = notebookSystemPrompt;
-        }
-
-        // Use session's vector DB + static RHDH knowledge base
-        const requestBodyTyped = req.body as QueryRequestBody;
-        requestBodyTyped.vector_store_ids = [
-          session.vector_db_id,
-          STATIC_VECTOR_DB_ID,
-        ];
-
-        // Prefix conversation_id with "nb-" to separate notebook conversations from developer conversations
-        if (requestBodyTyped.conversation_id) {
-          if (!requestBodyTyped.conversation_id.startsWith('nb-')) {
-            requestBodyTyped.conversation_id = `nb-${requestBodyTyped.conversation_id}`;
-          }
-        }
-
-        const requestBody = JSON.stringify(req.body);
-        const mcpHeaders = mcpToken
-          ? `{"${mcpServerName}": {"Authorization": "Bearer ${mcpToken}"}}`
-          : '';
-        const fetchResponse = await fetch(
-          `http://0.0.0.0:${port}/v1/streaming_query?${userQueryParam}`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'MCP-HEADERS': mcpHeaders,
-            },
-            body: requestBody,
-          },
-        );
-
-        if (!fetchResponse.ok) {
-          const errorBody = await fetchResponse.json();
-          const errormsg = `Error from lightspeed-core server: ${errorBody.error?.message || errorBody?.detail?.cause || 'Unknown error'}`;
-          logger.error(errormsg);
-
-          res.status(500).json({
-            error: errormsg,
-          });
-          return;
-        }
-
-        // Pipe the response back to the original response
-        fetchResponse.body.pipe(res);
-      } catch (error) {
-        const errormsg = `Error fetching notebook completions from ${provider}: ${error}`;
-        logger.error(errormsg);
-
-        if (error instanceof NotAllowedError) {
-          res.status(403).json({ error: error.message });
-        } else {
-          res.status(500).json({ error: errormsg });
-        }
-      }
-    },
-  );
-
-  // ============================================================================
-  // Document Management Endpoints
-  // ============================================================================
-
-  /**
-   * PUT /sessions/:sessionId/documents
-   * Upsert (create or update) a document in a session
-   */
-  router.put('/sessions/:sessionId/documents', async (req, res) => {
+  router.post('/v1/sessions/:sessionId/query', async (req, res) => {
+    const { provider }: Pick<QueryRequestBody, 'provider'> = req.body;
     try {
+      const userId = await getUserRef(req, httpAuth, userInfo);
+      const { sessionId } = req.params;
+
+      logger.info(
+        `/sessions/${sessionId}/query (notebook) receives call from user: ${userId}`,
+      );
+
       await checkPermission(
         req,
-        lightspeedNotebooksDocumentManagePermission,
+        lightspeedChatCreatePermission,
         httpAuth,
         permissions,
       );
 
-      const userId = await getUserRef(req, httpAuth, userInfo);
-      const { sessionId } = req.params;
-      const { title, content, metadata } = req.body;
-
-      // Verify session ownership and get vector_db_id
       const session = await sessionService.readSession(sessionId, userId);
 
-      if (!title) {
-        res.status(400).json({ error: 'title is required' });
-        return;
+      const userQueryParam = `user_id=${encodeURIComponent(userId)}`;
+      req.body.media_type = 'application/json';
+
+      if (notebookSystemPrompt && notebookSystemPrompt.trim().length > 0) {
+        req.body.system_prompt = notebookSystemPrompt;
       }
 
-      if (!content) {
-        res.status(400).json({ error: 'content is required' });
-        return;
-      }
-
-      const result = await documentService.upsertDocument(
+      const requestBodyTyped = req.body as QueryRequestBody;
+      requestBodyTyped.vector_store_ids = [
         session.vector_db_id,
-        title,
-        content,
-        metadata,
+        STATIC_VECTOR_DB_ID,
+      ];
+
+      // Prefix conversation_id with "nb-" to separate notebook from developer conversations
+      if (requestBodyTyped.conversation_id) {
+        if (!requestBodyTyped.conversation_id.startsWith('nb-')) {
+          requestBodyTyped.conversation_id = `nb-${requestBodyTyped.conversation_id}`;
+        }
+      }
+
+      requestBodyTyped.input_shields = ['notebook_question_validation'];
+
+      const requestBody = JSON.stringify(req.body);
+      const mcpHeaders = mcpToken
+        ? `{"${mcpServerName}": {"Authorization": "Bearer ${mcpToken}"}}`
+        : '';
+      const fetchResponse = await fetch(
+        `http://0.0.0.0:${port}/v1/streaming_query?${userQueryParam}`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'MCP-HEADERS': mcpHeaders,
+          },
+          body: requestBody,
+        },
       );
 
-      const response: DocumentResponse = {
-        status: 'success',
-        document_id: result.document_id,
-        title: title,
-        session_id: sessionId,
-        chunks_created: result.chunks_created,
-        replaced: result.replaced,
-        message: result.replaced
-          ? 'Document updated successfully'
-          : 'Document created successfully',
-      };
+      if (!fetchResponse.ok) {
+        const errorBody = await fetchResponse.json();
+        const errormsg = `Error from lightspeed-core server: ${errorBody.error?.message || errorBody?.detail?.cause || 'Unknown error'}`;
+        logger.error(errormsg);
 
-      res.json(response);
+        res.status(500).json({
+          error: errormsg,
+        });
+        return;
+      }
+
+      fetchResponse.body.pipe(res);
     } catch (error) {
-      const errormsg = `Error upserting document: ${error}`;
+      const errormsg = `Error fetching notebook completions from ${provider}: ${error}`;
       logger.error(errormsg);
 
       if (error instanceof NotAllowedError) {
@@ -486,10 +377,10 @@ export function createNotebooksRouter(options: NotebooksRouterOptions): Router {
   });
 
   /**
-   * GET /sessions/:sessionId/documents
+   * GET /v1/sessions/:sessionId/documents
    * List all documents in a session
    */
-  router.get('/sessions/:sessionId/documents', async (req, res) => {
+  router.get('/v1/sessions/:sessionId/documents', async (req, res) => {
     try {
       await checkPermission(
         req,
@@ -501,7 +392,6 @@ export function createNotebooksRouter(options: NotebooksRouterOptions): Router {
       const userId = await getUserRef(req, httpAuth, userInfo);
       const { sessionId } = req.params;
 
-      // Verify session ownership and get vector_db_id
       const session = await sessionService.readSession(sessionId, userId);
 
       const allDocuments = await documentService.listDocuments(
@@ -510,7 +400,6 @@ export function createNotebooksRouter(options: NotebooksRouterOptions): Router {
         session.vector_db_id,
       );
 
-      // Apply metadata filters from query parameters
       const fileType = req.query.fileType as string | undefined;
 
       let filteredDocuments = allDocuments;
@@ -530,24 +419,17 @@ export function createNotebooksRouter(options: NotebooksRouterOptions): Router {
 
       res.json(response);
     } catch (error) {
-      const errormsg = `Error listing documents: ${error}`;
-      logger.error(errormsg);
-
-      if (error instanceof NotAllowedError) {
-        res.status(403).json({ error: error.message });
-      } else {
-        res.status(500).json({ error: errormsg });
-      }
+      handleError(res, error, 'Error listing documents');
     }
   });
 
   /**
-   * DELETE /sessions/:sessionId/documents/:documentId
+   * DELETE /v1/sessions/:sessionId/documents/:documentId
    * Delete a specific document from a session
    * Note: Currently not supported by llama-stack 0.2.x
    */
   router.delete(
-    '/sessions/:sessionId/documents/:documentId',
+    '/v1/sessions/:sessionId/documents/:documentId',
     async (req, res) => {
       try {
         await checkPermission(
@@ -560,33 +442,24 @@ export function createNotebooksRouter(options: NotebooksRouterOptions): Router {
         const userId = await getUserRef(req, httpAuth, userInfo);
         const { sessionId } = req.params;
 
-        // Verify session ownership
         await sessionService.readSession(sessionId, userId);
 
-        // Document deletion not supported in llama-stack 0.2.x
         res.status(501).json({
           error:
             'Document deletion is not currently supported by llama-stack 0.2.x',
         });
       } catch (error) {
-        const errormsg = `Error deleting document: ${error}`;
-        logger.error(errormsg);
-
-        if (error instanceof NotAllowedError) {
-          res.status(403).json({ error: error.message });
-        } else {
-          res.status(500).json({ error: errormsg });
-        }
+        handleError(res, error, 'Error deleting document');
       }
     },
   );
 
   /**
-   * POST /sessions/:sessionId/documents/upload
-   * Upload and parse a document file (md, txt, pdf, json, yaml, log)
+   * POST /v1/sessions/:sessionId/documents/upload
+   * Upload and parse a document file (md, txt, pdf, json, yaml, yml, log) or URL
    */
   router.post(
-    '/sessions/:sessionId/documents/upload',
+    '/v1/sessions/:sessionId/documents/upload',
     upload.single('file'),
     async (req, res) => {
       try {
@@ -602,50 +475,63 @@ export function createNotebooksRouter(options: NotebooksRouterOptions): Router {
         const fileType = req.body.fileType as string;
         const customTitle = req.body.title as string | undefined;
 
-        // Validate file was uploaded
-        if (!req.file) {
-          res.status(400).json({ error: 'No file uploaded' });
-          return;
-        }
-
-        // Validate file type
         if (!fileType || !isValidFileType(fileType)) {
           res.status(400).json({
-            error: `Unsupported file type: ${fileType}. Supported types: md, txt, pdf, json, yaml, yml, log`,
+            error: `Unsupported file type: ${fileType}. Supported types: md, txt, pdf, json, yaml, yml, log, url`,
           });
           return;
         }
 
-        // Validate file size
-        if (!isValidFileSize(req.file.size)) {
-          res.status(400).json({
-            error: 'File size exceeds 20MB limit',
-          });
-          return;
-        }
-
-        // Verify session ownership and get vector_db_id
         const session = await sessionService.readSession(sessionId, userId);
 
-        logger.info(
-          `Parsing file ${req.file.originalname} (${fileType}) for session ${sessionId}`,
-        );
+        let parsedDocument;
+        let documentTitle;
 
-        // Parse file to extract text
-        const parsedDocument = await parseFile(
-          req.file.buffer,
-          req.file.originalname,
-          fileType,
-        );
+        if (fileType === 'url') {
+          const url = req.body.file as string | undefined;
 
-        // Use custom title or extracted title
-        const documentTitle =
-          customTitle ||
-          parsedDocument.metadata.fileName.replace(/\.[^/.]+$/, '');
+          if (!url) {
+            res
+              .status(400)
+              .json({ error: 'file field is required for URL type' });
+            return;
+          }
+
+          logger.info(
+            `Fetching URL ${url} (${fileType}) for session ${sessionId}`,
+          );
+
+          parsedDocument = await parseFile(Buffer.from(''), url, fileType);
+          documentTitle = customTitle || parsedDocument.metadata.fileName;
+        } else {
+          if (!req.file) {
+            res.status(400).json({ error: 'No file uploaded' });
+            return;
+          }
+
+          if (!isValidFileSize(req.file.size)) {
+            res.status(400).json({
+              error: 'File size exceeds 20MB limit',
+            });
+            return;
+          }
+
+          logger.info(
+            `Parsing file ${req.file.originalname} (${fileType}) for session ${sessionId}`,
+          );
+
+          parsedDocument = await parseFile(
+            req.file.buffer,
+            req.file.originalname,
+            fileType,
+          );
+          documentTitle =
+            customTitle ||
+            parsedDocument.metadata.fileName.replace(/\.[^/.]+$/, '');
+        }
 
         logger.info(`Upserting document with title: ${documentTitle}`);
 
-        // Upsert document to vector DB
         const result = await documentService.upsertDocument(
           session.vector_db_id,
           documentTitle,
@@ -667,14 +553,7 @@ export function createNotebooksRouter(options: NotebooksRouterOptions): Router {
 
         res.json(response);
       } catch (error) {
-        const errormsg = `Error uploading document: ${error}`;
-        logger.error(errormsg);
-
-        if (error instanceof NotAllowedError) {
-          res.status(403).json({ error: error.message });
-        } else {
-          res.status(500).json({ error: errormsg });
-        }
+        handleError(res, error, 'Error uploading document');
       }
     },
   );
