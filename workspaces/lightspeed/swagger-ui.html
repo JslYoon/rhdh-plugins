@@ -27,8 +27,8 @@
   <script src="https://unpkg.com/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
   <script>
     window.onload = async function() {
-      // Fetch the YAML file
-      const response = await fetch('./ai-notebooks-openapi.yaml');
+      // Fetch the YAML file from the backend API
+      const response = await fetch('./api-docs/openapi.yaml');
       const yamlText = await response.text();
       const spec = jsyaml.load(yamlText);
 

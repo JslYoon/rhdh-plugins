@@ -39,16 +39,7 @@ Jira Issue [RHDHIDP-9996](https://issues.redhat.com/browse/RHIDP-9996)
 
 ## API Endpoints
 
-For detailed API documentation, please refer to the [OpenAPI Specification](./ai-notebooks-openapi.yaml). You can also view the interactive Swagger UI by running:
-
-```bash
-yarn install
-yarn dev
-```
-
-And opening [http://localhost:8888/swagger-ui.html](http://localhost:8888/swagger-ui.html).
-
----
+## For detailed API documentation, please refer to the [OpenAPI Specification](./ai-notebooks-openapi.yaml)
 
 ## Configuration
 
@@ -83,10 +74,9 @@ yarn dev
 ### 1. Create a Session
 
 ```bash
-curl -X POST http://localhost:7007/api/lightspeed/sessions \
+curl -X POST http://localhost:7007/api/lightspeed/v1/sessions \
   -H "Content-Type: application/json" \
   -d '{
-    "operation": "create",
     "name": "My Research Session",
     "description": "Research on RHDH"
   }'
@@ -97,7 +87,7 @@ curl -X POST http://localhost:7007/api/lightspeed/sessions \
 **Upload PDF:**
 
 ```bash
-curl -X POST http://localhost:7007/api/lightspeed/sessions/SESSION_ID/documents/upload \
+curl -X POST http://localhost:7007/api/lightspeed/v1/sessions/SESSION_ID/documents/upload \
   -F "file=@./documentation.pdf" \
   -F "fileType=pdf" \
   -F "title=API Documentation"
@@ -106,31 +96,32 @@ curl -X POST http://localhost:7007/api/lightspeed/sessions/SESSION_ID/documents/
 **Upload Markdown:**
 
 ```bash
-curl -X POST http://localhost:7007/api/lightspeed/sessions/SESSION_ID/documents/upload \
+curl -X POST http://localhost:7007/api/lightspeed/v1/sessions/SESSION_ID/documents/upload \
   -F "file=@./README.md" \
   -F "fileType=md"
 ```
 
-**Upsert Text Content:**
+**Upload URL:**
 
 ```bash
-curl -X PUT http://localhost:7007/api/lightspeed/sessions/SESSION_ID/documents \
+curl -X POST http://localhost:7007/api/lightspeed/v1/sessions/SESSION_ID/documents/upload \
   -H "Content-Type: application/json" \
   -d '{
-    "title": "Setup Guide",
-    "content": "Step 1: Install dependencies\nStep 2: Configure..."
+    "fileType": "url",
+    "file": "https://example.com/documentation.html",
+    "title": "External Documentation"
   }'
 ```
 
 ### 3. Query with RAG
 
 ```bash
-curl -X POST http://localhost:7007/api/lightspeed/sessions/SESSION_ID/query \
+curl -X POST http://localhost:7007/api/lightspeed/v1/sessions/SESSION_ID/query \
   -H "Content-Type: application/json" \
   -d '{
     "query": "Summarize key features from the uploaded document",
-    "model": "gpt-4",
-    "provider": "openai"
+    "model": "meta-llama/Llama-3.1-8B-Instruct",
+    "provider": "llamastack"
   }'
 ```
 
@@ -174,11 +165,12 @@ session-{sanitized_user}-{timestamp}-{random}
 
 ### Supported File Types
 
-| Type       | Extensions               | Max Size | Parsing                    |
-| ---------- | ------------------------ | -------- | -------------------------- |
-| Text       | `.md`, `.txt`, `.log`    | 20MB     | UTF-8 text                 |
-| Structured | `.json`, `.yaml`, `.yml` | 20MB     | Validated & formatted      |
-| Binary     | `.pdf`                   | 20MB     | pdfjs-dist text extraction |
+| Type       | Extensions               | Max Size | Parsing                                |
+| ---------- | ------------------------ | -------- | -------------------------------------- |
+| Text       | `.md`, `.txt`, `.log`    | 20MB     | UTF-8 text                             |
+| Structured | `.json`, `.yaml`, `.yml` | 20MB     | Validated & formatted                  |
+| Binary     | `.pdf`                   | 20MB     | pdfjs-dist text extraction             |
+| URL        | `url`                    | N/A      | Fetches and extracts HTML/text content |
 
 ### PDF Parsing
 

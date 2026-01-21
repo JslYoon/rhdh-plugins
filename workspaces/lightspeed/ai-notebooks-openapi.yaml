@@ -23,7 +23,7 @@ tags:
     description: RAG-powered chat
 
 paths:
-  /sessions:
+  /v1/sessions:
     post:
       tags: [Sessions]
       summary: Create session
@@ -67,7 +67,7 @@ paths:
         '200':
           description: Success
 
-  /sessions/{sessionId}:
+  /v1/sessions/{sessionId}:
     get:
       tags: [Sessions]
       summary: Get session
@@ -113,7 +113,7 @@ paths:
         '200':
           description: Success
 
-  /sessions/{sessionId}/documents:
+  /v1/sessions/{sessionId}/documents:
     get:
       tags: [Documents]
       summary: List documents
@@ -127,7 +127,7 @@ paths:
       responses:
         '200':
           description: Success
-  /sessions/{sessionId}/documents/upload:
+  /v1/sessions/{sessionId}/documents/upload:
     post:
       tags: [Documents]
       summary: Upload document file
@@ -164,7 +164,7 @@ paths:
         '400':
           description: Invalid request
 
-  /sessions/{sessionId}/documents/{documentId}:
+  /v1/sessions/{sessionId}/documents/{documentId}:
     delete:
       tags: [Documents]
       summary: Delete document
@@ -185,7 +185,7 @@ paths:
         '501':
           description: Not implemented
 
-  /sessions/{sessionId}/query:
+  /v1/sessions/{sessionId}/query:
     post:
       tags: [Chat]
       summary: Query session with RAG

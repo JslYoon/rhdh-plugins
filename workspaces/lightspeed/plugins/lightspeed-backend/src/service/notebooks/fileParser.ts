@@ -30,6 +30,10 @@ export enum SupportedFileType {
   YML = 'yml',
   LOG = 'log',
   URL = 'url',
+  // Microsoft sets (powerpoint, excel, word, etc)
+  // OpenOffice sets (odt, ods, odp, etc)
+  // XML sets (xml, xlsx, xls, xlsm, xlsb, xltx, xltm, etc)
+  // Office formats
 }
 
 export interface ParsedDocument {
