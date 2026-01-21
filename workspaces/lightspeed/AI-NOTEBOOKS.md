@@ -25,7 +25,7 @@ Jira Issue [RHDHIDP-9996](https://issues.redhat.com/browse/RHIDP-9996)
 
 ## Architecture
 
-![Architecture Diagram](./docs/images/Notebooks-architecture-diagram.png)
+![Architecture Diagram](./docs/images/Notebooks_architecture-diagram.png)
 
 **Components:**
 
