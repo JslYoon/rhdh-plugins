@@ -1,0 +1,10 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: backstage-plugin-ai-notebooks-backend
+  title: AI Notebooks Backend Plugin
+  description: Backend plugin for AI Notebooks with session and document management
+spec:
+  type: backstage-plugin
+  lifecycle: experimental
+  owner: rhdh

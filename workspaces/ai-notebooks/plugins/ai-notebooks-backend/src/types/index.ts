@@ -1,0 +1,98 @@
+/*
+ * Copyright Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Session metadata for categorization and organization
+ */
+export interface SessionMetadata {
+  category?: string;
+  tags?: string[];
+  project?: string;
+  document_ids?: string[]; // Track documents in this session
+  document_count?: number; // Total number of documents
+  [key: string]: any;
+}
+
+/**
+ * Notebook session with vector database
+ */
+export interface NotebookSession {
+  session_id: string;
+  user_id: string;
+  name: string;
+  description: string;
+  vector_db_id: string;
+  created_at: string;
+  updated_at: string;
+  metadata?: SessionMetadata;
+}
+
+/**
+ * Document within a session
+ */
+export interface SessionDocument {
+  document_id: string;
+  title: string;
+  session_id: string;
+  user_id: string;
+  content_preview: string;
+  source_type: 'text' | 'pdf' | 'url' | 'md' | 'json' | 'yaml' | 'log';
+  created_at: string;
+  chunk_count?: number; // Number of chunks in this document
+  metadata?: Record<string, any>;
+}
+
+/**
+ * API Response types
+ */
+export interface SessionResponse {
+  status: 'success' | 'error';
+  session?: NotebookSession;
+  message?: string;
+  error?: string;
+}
+
+export interface SessionListResponse {
+  status: 'success' | 'error';
+  sessions?: NotebookSession[];
+  count?: number;
+  error?: string;
+}
+
+export interface DocumentResponse {
+  status: 'success' | 'error';
+  document_id?: string;
+  title?: string;
+  session_id?: string;
+  chunks_created?: number;
+  replaced?: boolean;
+  message?: string;
+  error?: string;
+}
+
+export interface DocumentListResponse {
+  status: 'success' | 'error';
+  session_id?: string;
+  documents?: SessionDocument[];
+  count?: number;
+  error?: string;
+}
+
+export interface QueryResponse {
+  status: 'success' | 'error';
+  chunks?: any[];
+  error?: string;
+}

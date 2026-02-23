@@ -1,5 +1,7 @@
-playwright.config.ts
+dist
 dist-types
 coverage
+.vscode
 .yarn
 .pnp.*
+.eslintrc.js

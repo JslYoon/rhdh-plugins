@@ -18,6 +18,7 @@ var path = require('path');
 
 module.exports = {
   root: true,
+  extends: [require.resolve('@backstage/cli/config/eslint')],
   plugins: ['@spotify', 'notice', 'react', 'testing-library'],
   ignorePatterns: ['.eslintrc.js', '.eslintrc.cjs'],
   rules: {

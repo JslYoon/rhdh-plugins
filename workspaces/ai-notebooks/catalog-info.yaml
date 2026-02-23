@@ -1,0 +1,8 @@
+apiVersion: backstage.io/v1alpha1
+kind: Location
+metadata:
+  name: ai-notebooks-plugins
+  description: AI Notebooks plugins for Red Hat Developer Hub
+spec:
+  targets:
+    - ./plugins/*/catalog-info.yaml

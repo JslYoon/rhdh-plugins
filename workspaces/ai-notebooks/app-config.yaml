@@ -1,0 +1,74 @@
+app:
+  title: AI Notebooks
+  baseUrl: http://localhost:3000
+
+organization:
+  name: Red Hat
+
+backend:
+  baseUrl: http://localhost:7007
+  listen:
+    port: 7007
+  csp:
+    connect-src: ["'self'", 'http:', 'https:']
+  cors:
+    origin: http://localhost:3000
+    methods: [GET, HEAD, PATCH, POST, PUT, DELETE]
+    credentials: true
+  database:
+    client: better-sqlite3
+    connection: ':memory:'
+
+integrations:
+  github:
+    - host: github.com
+      token: ${GITHUB_TOKEN}
+
+techdocs:
+  builder: 'local'
+  generator:
+    runIn: 'docker'
+  publisher:
+    type: 'local'
+
+auth:
+  providers:
+    guest: {}
+
+# Permission Framework Configuration
+permission:
+  enabled: true
+
+scaffolder: {}
+
+catalog:
+  import:
+    entityFilename: catalog-info.yaml
+    pullRequestBranchName: backstage-integration
+  rules:
+    - allow: [Component, System, API, Resource, Location]
+
+# AI Notebooks Configuration
+aiNotebooks:
+  # Enable or disable the AI Notebooks feature (default: true)
+  # When set to false, the feature will be hidden in the UI
+  enabled: true
+
+  llamaStack:
+    url: ${AI_NOTEBOOKS_LLAMA_STACK_URL:-http://0.0.0.0:8321}
+
+    # Embedding model configuration (must match Llama Stack 0.5 distribution)
+    # Default model in 0.5.0+rhai0: granite-embedding-125m-english (768 dimensions)
+    # Use 'client.models.list()' to see available models in your Llama Stack
+    embeddingModel: ${AI_NOTEBOOKS_EMBEDDING_MODEL:-granite-embedding-125m-english}
+    embeddingDimension: ${AI_NOTEBOOKS_EMBEDDING_DIMENSION:-768}
+
+    # Vector IO provider configuration
+    vectorIo:
+      # Default provider in Llama Stack 0.5.0+rhai0: milvus
+      # Available providers: milvus (default), faiss (requires ENABLE_FAISS=true),
+      #                      pgvector, qdrant-remote, milvus-remote
+      providerId: ${AI_NOTEBOOKS_VECTOR_PROVIDER:-milvus}
+
+  # Optional system prompt for notebook queries
+  # systemPrompt: "You are an AI assistant helping with notebook queries."
