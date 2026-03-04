@@ -1,0 +1,46 @@
+{
+  "name": "@red-hat-developer-hub/backstage-plugin-ai-notebooks-common",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "description": "Common functionalities for the ai-notebooks plugin",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "publishConfig": {
+    "access": "public",
+    "main": "dist/index.cjs.js",
+    "module": "dist/index.esm.js",
+    "types": "dist/index.d.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/redhat-developer/rhdh-plugins",
+    "directory": "workspaces/ai-notebooks/plugins/ai-notebooks-common"
+  },
+  "backstage": {
+    "role": "common-library",
+    "pluginId": "ai-notebooks",
+    "pluginPackage": "@red-hat-developer-hub/backstage-plugin-ai-notebooks-common",
+    "pluginPackages": [
+      "@red-hat-developer-hub/backstage-plugin-ai-notebooks-backend",
+      "@red-hat-developer-hub/backstage-plugin-ai-notebooks-common"
+    ]
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "backstage-cli package build",
+    "lint": "backstage-cli package lint",
+    "test": "backstage-cli package test",
+    "clean": "backstage-cli package clean",
+    "prepack": "backstage-cli package prepack",
+    "postpack": "backstage-cli package postpack"
+  },
+  "dependencies": {
+    "@backstage/plugin-permission-common": "^0.9.1"
+  },
+  "devDependencies": {
+    "@backstage/cli": "^0.34.1"
+  },
+  "files": [
+    "dist"
+  ]
+}

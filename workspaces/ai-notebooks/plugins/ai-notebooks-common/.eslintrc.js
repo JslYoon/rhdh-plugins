@@ -13,16 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-/**
- * AI Notebooks backend plugin for Red Hat Developer Hub
- *
- * @packageDocumentation
- */
-
-export { aiNotebooksPlugin as default } from './plugin';
-export * from './types';
-export {
-  aiNotebooksPermissions,
-  aiNotebooksUsePermission,
-} from '@red-hat-developer-hub/backstage-plugin-ai-notebooks-common';
+// Extend workspace config to avoid loading @backstage/eslint-plugin twice
+// (ESLint errors when the same plugin is resolved from different paths)
+module.exports = {
+  extends: ['../../.eslintrc.js'],
+};

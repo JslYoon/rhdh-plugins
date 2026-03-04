@@ -22,19 +22,18 @@ export interface SessionMetadata {
   tags?: string[];
   project?: string;
   document_ids?: string[]; // Track documents in this session
-  document_count?: number; // Total number of documents
   [key: string]: any;
 }
 
 /**
  * Notebook session with vector database
+ * session_id is the Llama Stack vector store ID
  */
 export interface NotebookSession {
   session_id: string;
   user_id: string;
   name: string;
   description: string;
-  vector_db_id: string;
   created_at: string;
   updated_at: string;
   metadata?: SessionMetadata;
@@ -48,10 +47,8 @@ export interface SessionDocument {
   title: string;
   session_id: string;
   user_id: string;
-  content_preview: string;
   source_type: 'text' | 'pdf' | 'url' | 'md' | 'json' | 'yaml' | 'log';
   created_at: string;
-  chunk_count?: number; // Number of chunks in this document
   metadata?: Record<string, any>;
 }
 
@@ -77,7 +74,6 @@ export interface DocumentResponse {
   document_id?: string;
   title?: string;
   session_id?: string;
-  chunks_created?: number;
   replaced?: boolean;
   message?: string;
   error?: string;

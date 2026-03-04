@@ -16,32 +16,57 @@
 
 import { LoggerService } from '@backstage/backend-plugin-api';
 import { Config } from '@backstage/config';
-import { LlamaStackClient } from 'llama-stack-client';
+import { LlamaStackClient, toFile } from 'llama-stack-client';
+import fetch from 'node-fetch';
 import { SessionDocument, NotebookSession } from '../types';
 
 interface UpsertResult {
   document_id: string;
-  chunks_created: number;
+  file_id: string;
   replaced: boolean;
+  status: 'completed' | 'in_progress' | 'failed' | 'cancelled';
 }
 
-const SESSION_METADATA_DOC_ID = '__session_metadata__';
-
 /**
- * Service for managing documents within notebook sessions
- * Each session has its own dedicated vector database
- * Uses ONLY Llama Stack APIs (no direct database access)
+ * Service for managing documents within notebook sessions using File-Based API
+ * Each session has its own dedicated vector store
+ * Uses Llama Stack File API for automatic chunking, embedding, and indexing
  */
 export class DocumentService {
   private logger: LoggerService;
   private client: LlamaStackClient;
-  private chunkSize: number = 512;
+  private fileProcessingTimeoutMs: number;
+  private chunkingStrategy: any;
 
   constructor(llamaStackUrl: string, logger: LoggerService, config?: Config) {
     this.client = new LlamaStackClient({ baseURL: llamaStackUrl });
     this.logger = logger;
-    // config parameter added for consistency with SessionService
-    // DocumentService uses vectorIo API which doesn't require provider_id
+
+    // File processing timeout
+    this.fileProcessingTimeoutMs =
+      config?.getOptionalNumber('aiNotebooks.fileProcessingTimeoutMs') || 30000;
+
+    // Chunking strategy configuration
+    const chunkingType =
+      config?.getOptionalString('aiNotebooks.chunkingStrategy.type') || 'auto';
+
+    if (chunkingType === 'static') {
+      this.chunkingStrategy = {
+        type: 'static',
+        static: {
+          max_chunk_size_tokens:
+            config?.getOptionalNumber(
+              'aiNotebooks.chunkingStrategy.maxChunkSizeTokens',
+            ) || 512,
+          chunk_overlap_tokens:
+            config?.getOptionalNumber(
+              'aiNotebooks.chunkingStrategy.chunkOverlapTokens',
+            ) || 50,
+        },
+      };
+    } else {
+      this.chunkingStrategy = { type: 'auto' };
+    }
   }
 
   /**
@@ -53,37 +78,44 @@ export class DocumentService {
     return (
       title
         .trim()
-        .toLowerCase()
+        .toLocaleLowerCase('en-US')
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '') || 'untitled'
     );
   }
 
   /**
-   * Retrieve session metadata from vector DB
+   * Retrieve session metadata from vector store metadata field
    */
   private async retrieveSessionMetadata(
-    vectorDbId: string,
+    sessionId: string,
   ): Promise<NotebookSession | null> {
     try {
-      const result = await this.client.vectorIo.query({
-        vector_db_id: vectorDbId,
-        query: SESSION_METADATA_DOC_ID,
-        params: { max_chunks: 1 },
-      });
+      const vectorStore = await this.client.vectorStores.retrieve(sessionId);
 
-      const chunk = result.chunks?.find(
-        c => c.chunk_metadata?.chunk_id === SESSION_METADATA_DOC_ID,
-      );
+      if (!vectorStore.metadata) {
+        return null;
+      }
 
-      if (!chunk) return null;
+      const metadata = vectorStore.metadata as Record<string, any>;
 
-      const content =
-        typeof chunk.content === 'string'
-          ? chunk.content
-          : JSON.stringify(chunk.content);
-
-      return JSON.parse(content) as NotebookSession;
+      return {
+        session_id: sessionId,
+        user_id: metadata.user_id as string,
+        name: metadata.name as string,
+        description: metadata.description as string,
+        created_at: metadata.created_at as string,
+        updated_at: metadata.updated_at as string,
+        metadata: {
+          category: metadata.category,
+          tags: metadata.tags,
+          project: metadata.project,
+          document_ids: metadata.document_ids,
+          embedding_model: metadata.embedding_model,
+          embedding_dimension: metadata.embedding_dimension,
+          provider_id: metadata.provider_id,
+        },
+      };
     } catch (error) {
       this.logger.error(`Failed to retrieve session metadata: ${error}`);
       return null;
@@ -91,48 +123,67 @@ export class DocumentService {
   }
 
   /**
-   * Store session metadata in vector DB
+   * Store session metadata in vector store metadata field
+   * Ensures document_ids and embedding config are preserved
    */
-  private async storeSessionMetadata(
-    session: NotebookSession,
-  ): Promise<void> {
-    await this.client.vectorIo.insert({
-      vector_db_id: session.vector_db_id,
-      chunks: [
-        {
-          content: JSON.stringify(session),
-          metadata: {
-            type: 'session_metadata',
-            document_id: SESSION_METADATA_DOC_ID,
-          },
-          chunk_metadata: {
-            chunk_id: SESSION_METADATA_DOC_ID,
-            document_id: SESSION_METADATA_DOC_ID,
-          },
-        },
-      ],
+  private async storeSessionMetadata(session: NotebookSession): Promise<void> {
+    const metadata = {
+      user_id: session.user_id,
+      name: session.name,
+      description: session.description,
+      created_at: session.created_at,
+      updated_at: session.updated_at,
+      // Spread session.metadata which includes embedding config and document_ids
+      ...(session.metadata || {}),
+    };
+
+    await this.client.vectorStores.update(session.session_id, {
+      metadata,
     });
   }
 
   /**
-   * Split content into chunks of approximately 512 words
+   * Wait for file processing to complete
    */
-  private chunkContent(content: string): string[] {
-    const chunks: string[] = [];
-    const words = content.split(/\s+/);
+  private async waitForFileProcessing(
+    sessionId: string,
+    fileId: string,
+  ): Promise<void> {
+    const startTime = Date.now();
+    const pollIntervalMs = 1000;
 
-    for (let i = 0; i < words.length; i += this.chunkSize) {
-      const chunk = words.slice(i, i + this.chunkSize).join(' ');
-      if (chunk.trim().length > 0) {
-        chunks.push(chunk);
+    while (Date.now() - startTime < this.fileProcessingTimeoutMs) {
+      const file = await this.client.vectorStores.files.retrieve(
+        sessionId,
+        fileId,
+      );
+
+      if (file.status === 'completed') {
+        this.logger.info(`File ${fileId} processing completed`);
+        return;
       }
+
+      if (file.status === 'failed') {
+        const errorMsg = file.last_error?.message || 'Unknown error';
+        this.logger.error(`File ${fileId} processing failed: ${errorMsg}`);
+        throw new Error(`File processing failed: ${errorMsg}`);
+      }
+
+      if (file.status === 'cancelled') {
+        throw new Error('File processing was cancelled');
+      }
+
+      // Still in_progress, wait and retry
+      this.logger.debug(`File ${fileId} still processing, waiting...`);
+      await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
     }
 
-    return chunks.length > 0 ? chunks : [content];
+    throw new Error(
+      `File processing timeout after ${this.fileProcessingTimeoutMs}ms`,
+    );
   }
 
   async uploadDocument(
-    vectorDbId: string,
     sessionId: string,
     userId: string,
     title: string,
@@ -141,52 +192,52 @@ export class DocumentService {
   ): Promise<UpsertResult> {
     const documentId = this.sanitizeTitle(title);
 
-    // Check if document already exists
-    const existingQuery = await this.client.vectorIo.query({
-      vector_db_id: vectorDbId,
-      query: documentId,
-      params: {
-        max_chunks: 100,
-      },
+    // Check if document already exists by listing files
+    const existingFiles = await this.client.vectorStores.files.list(sessionId);
+    const existingFile = existingFiles.data.find(
+      f => f.attributes?.document_id === documentId,
+    );
+
+    // Throw error if document with this title already exists
+    if (existingFile) {
+      throw new Error(
+        `A document with the title "${title}" already exists in this session. Please use a different title or update the existing document.`,
+      );
+    }
+
+    // 1. Upload file to Files API
+    const file = await this.client.files.create({
+      file: await toFile(Buffer.from(content, 'utf-8'), `${documentId}.txt`, {
+        type: 'text/plain',
+      }),
+      purpose: 'assistants',
     });
 
-    const replaced = existingQuery.chunks && existingQuery.chunks.length > 0;
+    this.logger.info(`File uploaded: ${file.id} for document ${documentId}`);
 
-    // Chunk the content
-    const contentChunks = this.chunkContent(content);
-    this.logger.info(`Split content into ${contentChunks.length} chunks`);
-
-    const now = Date.now();
-
-    // Create chunks for insertion with ordering
-    const chunks = contentChunks.map((chunkContent, index) => {
-      const chunkId = `${documentId}#chunk-${index}`;
-      return {
-        content: chunkContent,
-        metadata: {
-          user_id: userId,
+    // 2. Attach file to vector store with metadata
+    const vectorStoreFile = await this.client.vectorStores.files.create(
+      sessionId,
+      {
+        file_id: file.id,
+        attributes: {
           document_id: documentId,
+          user_id: userId,
           title: title,
-          chunk_index: index, // Track chunk order
+          session_id: sessionId,
+          source_type: metadata?.fileType || 'text',
+          created_at: new Date().toISOString(),
           ...(metadata || {}),
         },
-        chunk_metadata: {
-          chunk_id: chunkId,
-          document_id: documentId,
-          created_timestamp: now,
-          updated_timestamp: now,
-        },
-      };
-    });
+        chunking_strategy: this.chunkingStrategy,
+      },
+    );
 
-    // Insert chunks
-    await this.client.vectorIo.insert({
-      vector_db_id: vectorDbId,
-      chunks,
-    });
+    // 3. Wait for file processing to complete
+    await this.waitForFileProcessing(sessionId, file.id);
 
-    // Update session metadata with document list
-    const session = await this.retrieveSessionMetadata(vectorDbId);
+    // 4. Update session metadata with document list
+    const session = await this.retrieveSessionMetadata(sessionId);
     if (session) {
       const documentIds = session.metadata?.document_ids || [];
       if (!documentIds.includes(documentId)) {
@@ -194,7 +245,6 @@ export class DocumentService {
         session.metadata = {
           ...session.metadata,
           document_ids: documentIds,
-          document_count: documentIds.length,
         };
         session.updated_at = new Date().toISOString();
         await this.storeSessionMetadata(session);
@@ -202,108 +252,280 @@ export class DocumentService {
     }
 
     this.logger.info(
-      `Document "${title}" (ID: ${documentId}) ${replaced ? 'updated' : 'created'} with ${chunks.length} chunks`,
+      `Document "${title}" (ID: ${documentId}) created with file ${file.id}`,
     );
 
     return {
       document_id: documentId,
-      chunks_created: chunks.length,
-      replaced,
+      file_id: file.id,
+      replaced: false,
+      status: vectorStoreFile.status,
     };
   }
 
   async listDocuments(
-    vectorDbId: string,
     sessionId: string,
     userId: string,
     fileTypeFilter?: string,
   ): Promise<SessionDocument[]> {
     this.logger.info(`Listing documents for session ${sessionId}`);
 
-    // Query for all documents
-    const result = await this.client.vectorIo.query({
-      vector_db_id: vectorDbId,
-      query: 'document',
-      params: {
-        max_chunks: 1000,
-      },
-    });
+    // List all files in vector store
+    const filesResponse = await this.client.vectorStores.files.list(sessionId);
 
-    if (!result.chunks || result.chunks.length === 0) {
+    if (!filesResponse.data || filesResponse.data.length === 0) {
       return [];
     }
 
-    // Group chunks by document_id to get unique documents
-    const documentMap = new Map<
-      string,
-      { doc: SessionDocument; chunkCount: number }
-    >();
+    // Map files to SessionDocument format
+    const documents = filesResponse.data
+      .filter(file => {
+        // Apply file type filter if provided
+        if (fileTypeFilter && file.attributes?.source_type !== fileTypeFilter) {
+          return false;
+        }
+        return true;
+      })
+      .map(file => {
+        const attrs = file.attributes || {};
 
-    for (const chunk of result.chunks) {
-      const docId = chunk.chunk_metadata?.document_id;
+        return {
+          document_id: (attrs.document_id as string) || file.id,
+          title: (attrs.title as string) || file.id,
+          session_id: sessionId,
+          user_id: (attrs.user_id as string) || userId,
+          source_type:
+            (attrs.source_type as SessionDocument['source_type']) || 'text',
+          created_at: attrs.created_at
+            ? (attrs.created_at as string)
+            : new Date(file.created_at * 1000).toISOString(),
+        };
+      });
 
-      // Skip session metadata chunk
-      if (!docId || docId === SESSION_METADATA_DOC_ID) continue;
-
-      // Apply file type filter if provided
-      if (fileTypeFilter && chunk.metadata?.fileType !== fileTypeFilter) {
-        continue;
-      }
-
-      if (!documentMap.has(docId)) {
-        const metadata = chunk.metadata as Record<string, any>;
-        const createdTimestamp = chunk.chunk_metadata?.created_timestamp;
-
-        documentMap.set(docId, {
-          doc: {
-            document_id: docId,
-            title: (metadata?.title as string) || docId,
-            session_id: sessionId,
-            user_id: userId,
-            content_preview:
-              typeof chunk.content === 'string'
-                ? chunk.content.substring(0, 200)
-                : '',
-            source_type:
-              (metadata?.fileType as SessionDocument['source_type']) || 'text',
-            created_at: createdTimestamp
-              ? new Date(createdTimestamp).toISOString()
-              : new Date().toISOString(),
-            chunk_count: 0,
-            metadata: metadata || {},
-          },
-          chunkCount: 0,
-        });
-      }
-
-      // Increment chunk count
-      const entry = documentMap.get(docId)!;
-      entry.chunkCount++;
-      entry.doc.chunk_count = entry.chunkCount;
-    }
-
-    const documents = Array.from(documentMap.values()).map(entry => entry.doc);
     this.logger.info(
       `Found ${documents.length} documents in session ${sessionId}`,
     );
     return documents;
   }
 
-  async query(
+  /**
+   * Retrieve file content from Files API
+   */
+  private async retrieveFileContent(fileId: string): Promise<string> {
+    try {
+      // Llama Stack Files API should support content retrieval via /v1/files/{file_id}/content
+      const fileObject = await this.client.files.retrieve(fileId);
+
+      // If the file object has content, return it
+      if (fileObject && typeof fileObject === 'object') {
+        const anyFileObject = fileObject as any;
+        if (anyFileObject.content) {
+          return anyFileObject.content;
+        }
+      }
+
+      // If content not in retrieve response, try fetching raw content
+      // This follows OpenAI Files API pattern: GET /v1/files/{file_id}/content
+      const baseURL =
+        (this.client as any)._client?.baseURL || 'http://localhost:8321';
+      const response = await fetch(`${baseURL}/v1/files/${fileId}/content`);
+
+      if (!response.ok) {
+        throw new Error(
+          `Failed to retrieve file content: ${response.statusText}`,
+        );
+      }
+
+      return await response.text();
+    } catch (error) {
+      this.logger.warn(
+        `Could not retrieve file content for ${fileId}: ${error}`,
+      );
+      throw new Error(
+        `Cannot retrieve existing file content. Please provide new content when updating the document.`,
+      );
+    }
+  }
+
+  /**
+   * Update a document's title and/or content
+   * If only title is updated, existing content is retrieved and re-uploaded
+   * If content is updated, new content must be provided
+   */
+  async updateDocument(
     sessionId: string,
-    query: string,
-    topK: number = 5,
-  ): Promise<any[]> {
-    // ✅ Use Llama Stack API for vector search
-    // Llama Stack queries SQLite automatically
-    const result = await this.client.vectorIo.query({
-      vector_db_id: sessionId,
-      query: query,
-      params: {
-        max_chunks: topK,
-      },
+    userId: string,
+    currentDocumentId: string,
+    newTitle?: string,
+    newContent?: string,
+    metadata?: Record<string, any>,
+  ): Promise<UpsertResult> {
+    this.logger.info(`Updating document ${currentDocumentId} in ${sessionId}`);
+
+    // Find the existing document
+    const filesResponse = await this.client.vectorStores.files.list(sessionId);
+    const existingFile = filesResponse.data.find(
+      f => f.attributes?.document_id === currentDocumentId,
+    );
+
+    if (!existingFile) {
+      throw new Error(`Document not found: ${currentDocumentId}`);
+    }
+
+    // Get current attributes
+    const currentAttrs = existingFile.attributes || {};
+    const currentTitle = (currentAttrs.title as string) || currentDocumentId;
+
+    // Determine new title
+    const finalTitle = newTitle || currentTitle;
+
+    // Determine content: use new content if provided, otherwise retrieve existing
+    let contentToUpload: string;
+    if (newContent) {
+      contentToUpload = newContent;
+      this.logger.info('Using new content for document update');
+    } else {
+      this.logger.info(
+        'No new content provided, retrieving existing file content',
+      );
+      contentToUpload = await this.retrieveFileContent(existingFile.id);
+    }
+
+    // Calculate new document ID from new title
+    const newDocumentId = this.sanitizeTitle(finalTitle);
+
+    // If title is changing, check if new document_id already exists as a different document
+    if (newDocumentId !== currentDocumentId) {
+      const conflictingFile = filesResponse.data.find(
+        f => f.attributes?.document_id === newDocumentId,
+      );
+
+      if (conflictingFile) {
+        throw new Error(
+          `A document with the title "${finalTitle}" already exists in this session`,
+        );
+      }
+    }
+
+    this.logger.info(`Updating document: "${currentTitle}" -> "${finalTitle}"`);
+
+    // Delete the old file
+    await this.client.vectorStores.files.delete(sessionId, existingFile.id);
+    try {
+      await this.client.files.delete(existingFile.id);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to delete old file ${existingFile.id}: ${error}`,
+      );
+    }
+
+    // Create new file with updated data
+    const file = await this.client.files.create({
+      file: await toFile(
+        Buffer.from(contentToUpload, 'utf-8'),
+        `${newDocumentId}.txt`,
+        { type: 'text/plain' },
+      ),
+      purpose: 'assistants',
     });
 
-    return result.chunks || [];
+    this.logger.info(
+      `New file uploaded: ${file.id} for document ${newDocumentId}`,
+    );
+
+    // Attach file to vector store with updated metadata
+    const vectorStoreFile = await this.client.vectorStores.files.create(
+      sessionId,
+      {
+        file_id: file.id,
+        attributes: {
+          ...currentAttrs,
+          document_id: newDocumentId,
+          user_id: userId,
+          title: finalTitle,
+          session_id: sessionId,
+          updated_at: new Date().toISOString(),
+          ...(metadata || {}),
+        },
+        chunking_strategy: this.chunkingStrategy,
+      },
+    );
+
+    // Wait for file processing to complete
+    await this.waitForFileProcessing(sessionId, file.id);
+
+    // Update session metadata if document_id changed
+    if (newDocumentId !== currentDocumentId) {
+      const session = await this.retrieveSessionMetadata(sessionId);
+      if (session && session.metadata?.document_ids) {
+        const documentIds = session.metadata.document_ids.map(id =>
+          id === currentDocumentId ? newDocumentId : id,
+        );
+        session.metadata = {
+          ...session.metadata,
+          document_ids: documentIds,
+        };
+        session.updated_at = new Date().toISOString();
+        await this.storeSessionMetadata(session);
+      }
+    }
+
+    this.logger.info(
+      `Document "${currentDocumentId}" updated successfully (new ID: ${newDocumentId})`,
+    );
+
+    return {
+      document_id: newDocumentId,
+      file_id: file.id,
+      replaced: true,
+      status: vectorStoreFile.status,
+    };
+  }
+
+  /**
+   * Delete a document from the vector store
+   */
+  async deleteDocument(sessionId: string, documentId: string): Promise<void> {
+    this.logger.info(`Deleting document ${documentId} from ${sessionId}`);
+
+    // Find file by document_id in attributes
+    const filesResponse = await this.client.vectorStores.files.list(sessionId);
+    const file = filesResponse.data.find(
+      f => f.attributes?.document_id === documentId,
+    );
+
+    if (!file) {
+      throw new Error(`Document not found: ${documentId}`);
+    }
+
+    // Delete from vector store (removes chunks and embeddings)
+    await this.client.vectorStores.files.delete(sessionId, file.id);
+    this.logger.info(`Deleted file ${file.id} from vector store`);
+
+    // Delete from Files API (cleanup)
+    try {
+      await this.client.files.delete(file.id);
+      this.logger.info(`Deleted file ${file.id} from Files API`);
+    } catch (error) {
+      this.logger.warn(
+        `Failed to delete file ${file.id} from Files API: ${error}`,
+      );
+    }
+
+    // Update session metadata to remove document
+    const session = await this.retrieveSessionMetadata(sessionId);
+    if (session && session.metadata?.document_ids) {
+      const documentIds = session.metadata.document_ids.filter(
+        id => id !== documentId,
+      );
+      session.metadata = {
+        ...session.metadata,
+        document_ids: documentIds,
+      };
+      session.updated_at = new Date().toISOString();
+      await this.storeSessionMetadata(session);
+    }
+
+    this.logger.info(`Document ${documentId} successfully deleted`);
   }
 }

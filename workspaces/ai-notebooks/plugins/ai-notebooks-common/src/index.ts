@@ -15,14 +15,9 @@
  */
 
 /**
- * AI Notebooks backend plugin for Red Hat Developer Hub
+ * Common functionalities for the ai-notebooks plugin.
  *
  * @packageDocumentation
  */
 
-export { aiNotebooksPlugin as default } from './plugin';
-export * from './types';
-export {
-  aiNotebooksPermissions,
-  aiNotebooksUsePermission,
-} from '@red-hat-developer-hub/backstage-plugin-ai-notebooks-common';
+export * from './permissions';

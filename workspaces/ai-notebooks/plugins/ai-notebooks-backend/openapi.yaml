@@ -1,0 +1,1003 @@
+openapi: 3.0.3
+info:
+  title: AI Notebooks API
+  description: |
+    REST API for managing AI-powered notebook sessions with document uploads and RAG-based querying.
+
+    This API provides session-based document management with Retrieval Augmented Generation (RAG) capabilities.
+    Each session has its own dedicated vector store for document embeddings and similarity search.
+  version: 1.0.0
+  contact:
+    name: Red Hat Developer Hub
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+
+servers:
+  - url: http://localhost:7007/api/ai-notebooks
+    description: Local development server
+  - url: https://your-backstage-instance.com/api/ai-notebooks
+    description: Production server
+
+tags:
+  - name: Sessions
+    description: Manage notebook sessions and vector stores
+  - name: Documents
+    description: Upload and manage documents within sessions
+  - name: Query
+    description: AI-powered queries with RAG
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Check if the AI Notebooks service is running
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /v1/sessions:
+    post:
+      summary: Create a new session
+      description: Creates a new notebook session with a dedicated vector store for document embeddings
+      tags:
+        - Sessions
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                  description: Session name
+                  example: "Data Analysis Project"
+                description:
+                  type: string
+                  description: Session description
+                  example: "Analyzing customer behavior data"
+                metadata:
+                  type: object
+                  description: Optional session metadata
+                  properties:
+                    category:
+                      type: string
+                      example: "analytics"
+                    tags:
+                      type: array
+                      items:
+                        type: string
+                      example: ["data-science", "python"]
+                    project:
+                      type: string
+                      example: "customer-insights"
+      responses:
+        '200':
+          description: Session created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+              example:
+                status: success
+                session:
+                  session_id: "vs_1234567890abcdef"
+                  user_id: "user:default/alice"
+                  name: "Data Analysis Project"
+                  description: "Analyzing customer behavior data"
+                  created_at: "2026-03-04T10:30:00.000Z"
+                  updated_at: "2026-03-04T10:30:00.000Z"
+                  metadata:
+                    category: "analytics"
+                    tags: ["data-science", "python"]
+                    project: "customer-insights"
+                    document_ids: []
+                    embedding_model: "sentence-transformers/nomic-ai/nomic-embed-text-v1.5"
+                    embedding_dimension: 768
+                    provider_id: "faiss"
+                message: "Session created successfully"
+        '400':
+          description: Bad request - name is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: error
+                error: "name is required"
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    get:
+      summary: List all sessions
+      description: Retrieve all sessions for the authenticated user with optional filtering
+      tags:
+        - Sessions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: category
+          in: query
+          description: Filter by category
+          schema:
+            type: string
+          example: "analytics"
+        - name: tags
+          in: query
+          description: Filter by tags (comma-separated)
+          schema:
+            type: string
+          example: "data-science,python"
+        - name: project
+          in: query
+          description: Filter by project
+          schema:
+            type: string
+          example: "customer-insights"
+      responses:
+        '200':
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionListResponse'
+              example:
+                status: success
+                sessions:
+                  - session_id: "vs_1234567890abcdef"
+                    user_id: "user:default/alice"
+                    name: "Data Analysis Project"
+                    description: "Analyzing customer behavior data"
+                    created_at: "2026-03-04T10:30:00.000Z"
+                    updated_at: "2026-03-04T10:30:00.000Z"
+                    metadata:
+                      category: "analytics"
+                      tags: ["data-science", "python"]
+                      project: "customer-insights"
+                      document_ids: ["research-paper", "dataset-notes"]
+                  - session_id: "vs_0987654321fedcba"
+                    user_id: "user:default/alice"
+                    name: "ML Model Training"
+                    description: "Training recommendation model"
+                    created_at: "2026-03-03T15:20:00.000Z"
+                    updated_at: "2026-03-03T15:20:00.000Z"
+                    metadata:
+                      category: "ml"
+                      tags: ["machine-learning", "tensorflow"]
+                      project: "recommendations"
+                      document_ids: []
+                count: 2
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /v1/sessions/{sessionId}:
+    get:
+      summary: Get a session by ID
+      description: Retrieve details of a specific session
+      tags:
+        - Sessions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Session details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+              example:
+                status: success
+                session:
+                  session_id: "vs_1234567890abcdef"
+                  user_id: "user:default/alice"
+                  name: "Data Analysis Project"
+                  description: "Analyzing customer behavior data"
+                  created_at: "2026-03-04T10:30:00.000Z"
+                  updated_at: "2026-03-04T10:30:00.000Z"
+                  metadata:
+                    category: "analytics"
+                    tags: ["data-science", "python"]
+                    project: "customer-insights"
+                    document_ids: ["research-paper", "dataset-notes"]
+                message: "Session retrieved successfully"
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      summary: Update a session
+      description: Update session name, description, or metadata
+      tags:
+        - Sessions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  description: New session name
+                  example: "Updated Project Name"
+                description:
+                  type: string
+                  description: New session description
+                  example: "Updated description"
+                metadata:
+                  type: object
+                  description: New metadata (replaces existing)
+                  properties:
+                    category:
+                      type: string
+                    tags:
+                      type: array
+                      items:
+                        type: string
+                    project:
+                      type: string
+              example:
+                name: "Advanced Data Analysis"
+                description: "Deep dive into customer behavior"
+                metadata:
+                  category: "analytics"
+                  tags: ["data-science", "python", "pandas"]
+                  project: "customer-insights"
+      responses:
+        '200':
+          description: Session updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+              example:
+                status: success
+                session:
+                  session_id: "vs_1234567890abcdef"
+                  user_id: "user:default/alice"
+                  name: "Advanced Data Analysis"
+                  description: "Deep dive into customer behavior"
+                  created_at: "2026-03-04T10:30:00.000Z"
+                  updated_at: "2026-03-04T11:15:00.000Z"
+                  metadata:
+                    category: "analytics"
+                    tags: ["data-science", "python", "pandas"]
+                    project: "customer-insights"
+                    document_ids: ["research-paper", "dataset-notes"]
+                message: "Session updated successfully"
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      summary: Delete a session
+      description: Delete a session and all its associated documents and vector data
+      tags:
+        - Sessions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      responses:
+        '200':
+          description: Session deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SessionResponse'
+              example:
+                status: success
+                session:
+                  session_id: "vs_1234567890abcdef"
+                  user_id: "user:default/alice"
+                  name: "Advanced Data Analysis"
+                  description: "Deep dive into customer behavior"
+                  created_at: "2026-03-04T10:30:00.000Z"
+                  updated_at: "2026-03-04T11:15:00.000Z"
+                  metadata:
+                    category: "analytics"
+                    tags: ["data-science", "python", "pandas"]
+                    project: "customer-insights"
+                    document_ids: ["research-paper", "dataset-notes"]
+                message: "Session deleted successfully"
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /v1/sessions/{sessionId}/documents/upload:
+    post:
+      summary: Upload a document
+      description: |
+        Upload a document file or URL to the session's vector store. The document will be:
+        1. Parsed and extracted (supports PDF, markdown, text, JSON, YAML, logs, URLs)
+        2. Chunked into smaller segments
+        3. Embedded using the session's embedding model
+        4. Indexed in the vector store for RAG queries
+      tags:
+        - Documents
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - fileType
+              properties:
+                fileType:
+                  type: string
+                  enum: [md, txt, pdf, json, yaml, yml, log, url]
+                  description: Type of file being uploaded
+                file:
+                  oneOf:
+                    - type: string
+                      format: binary
+                      description: File upload (for non-URL types)
+                    - type: string
+                      description: URL string (when fileType is 'url')
+                title:
+                  type: string
+                  description: Custom title for the document (optional, defaults to filename)
+            examples:
+              pdfUpload:
+                summary: Upload PDF file
+                value:
+                  fileType: pdf
+                  file: "@research-paper.pdf"
+                  title: "Research Paper on Neural Networks"
+              urlUpload:
+                summary: Upload from URL
+                value:
+                  fileType: url
+                  file: "https://example.com/documentation.md"
+                  title: "API Documentation"
+              textUpload:
+                summary: Upload text file
+                value:
+                  fileType: txt
+                  file: "@notes.txt"
+      responses:
+        '200':
+          description: Document uploaded successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+              example:
+                status: success
+                document_id: "research-paper-on-neural-networks"
+                title: "Research Paper on Neural Networks"
+                session_id: "vs_1234567890abcdef"
+                replaced: false
+                message: "Document created successfully"
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                unsupportedFileType:
+                  value:
+                    status: error
+                    error: "Unsupported file type: exe. Supported types: md, txt, pdf, json, yaml, yml, log, url"
+                fileSizeExceeded:
+                  value:
+                    status: error
+                    error: "File size exceeds 20MB limit"
+                duplicateTitle:
+                  value:
+                    status: error
+                    error: "A document with the title \"Research Paper on Neural Networks\" already exists in this session. Please use a different title or update the existing document."
+                noFile:
+                  value:
+                    status: error
+                    error: "No file uploaded"
+                urlRequired:
+                  value:
+                    status: error
+                    error: "file field is required for URL type"
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /v1/sessions/{sessionId}/documents:
+    get:
+      summary: List all documents in a session
+      description: Retrieve all documents uploaded to a specific session
+      tags:
+        - Documents
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - name: fileType
+          in: query
+          description: Filter by file type
+          schema:
+            type: string
+            enum: [md, txt, pdf, json, yaml, yml, log, url]
+          example: pdf
+      responses:
+        '200':
+          description: List of documents
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentListResponse'
+              example:
+                status: success
+                session_id: "vs_1234567890abcdef"
+                documents:
+                  - document_id: "research-paper-on-neural-networks"
+                    title: "Research Paper on Neural Networks"
+                    session_id: "vs_1234567890abcdef"
+                    user_id: "user:default/alice"
+                    source_type: "pdf"
+                    created_at: "2026-03-04T10:35:00.000Z"
+                  - document_id: "dataset-notes"
+                    title: "Dataset Notes"
+                    session_id: "vs_1234567890abcdef"
+                    user_id: "user:default/alice"
+                    source_type: "md"
+                    created_at: "2026-03-04T10:40:00.000Z"
+                  - document_id: "api-documentation"
+                    title: "API Documentation"
+                    session_id: "vs_1234567890abcdef"
+                    user_id: "user:default/alice"
+                    source_type: "url"
+                    created_at: "2026-03-04T10:45:00.000Z"
+                count: 3
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /v1/sessions/{sessionId}/documents/{documentId}:
+    put:
+      summary: Update a document
+      description: |
+        Update a document's title and/or content. You can:
+        - Update only the title (existing content is preserved)
+        - Update only the content (upload new file or URL)
+        - Update both title and content
+      tags:
+        - Documents
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/DocumentId'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                  description: New title for the document
+                fileType:
+                  type: string
+                  enum: [md, txt, pdf, json, yaml, yml, log, url]
+                  description: Type of file (required if updating content)
+                file:
+                  oneOf:
+                    - type: string
+                      format: binary
+                      description: New file content
+                    - type: string
+                      description: New URL (when fileType is 'url')
+            examples:
+              titleOnly:
+                summary: Update title only
+                value:
+                  title: "Updated Research Paper Title"
+              contentOnly:
+                summary: Update content only
+                value:
+                  fileType: pdf
+                  file: "@updated-paper.pdf"
+              both:
+                summary: Update both title and content
+                value:
+                  title: "Revised Neural Networks Paper"
+                  fileType: pdf
+                  file: "@revised-paper.pdf"
+      responses:
+        '200':
+          description: Document updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+              example:
+                status: success
+                document_id: "revised-neural-networks-paper"
+                title: "Revised Neural Networks Paper"
+                session_id: "vs_1234567890abcdef"
+                replaced: true
+                message: "Document updated successfully"
+        '400':
+          description: Bad request - validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                nothingToUpdate:
+                  value:
+                    status: error
+                    error: "At least one of title or file/URL must be provided for update"
+                duplicateTitle:
+                  value:
+                    status: error
+                    error: "A document with the title \"Revised Neural Networks Paper\" already exists in this session"
+                unsupportedFileType:
+                  value:
+                    status: error
+                    error: "Unsupported file type: exe"
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    delete:
+      summary: Delete a document
+      description: Remove a document from the session's vector store
+      tags:
+        - Documents
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+        - $ref: '#/components/parameters/DocumentId'
+      responses:
+        '200':
+          description: Document deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DocumentResponse'
+              example:
+                status: success
+                document_id: "research-paper-on-neural-networks"
+                session_id: "vs_1234567890abcdef"
+                message: "Document deleted successfully"
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /v1/sessions/{sessionId}/query:
+    post:
+      summary: Query session with RAG
+      description: |
+        Send a natural language query to the AI assistant. The query will:
+        1. Search the session's vector store for relevant document chunks
+        2. Retrieve the most similar chunks based on semantic similarity
+        3. Pass the query and retrieved context to the LLM
+        4. Stream back the AI-generated response
+
+        The response is streamed using Server-Sent Events (SSE) format.
+      tags:
+        - Query
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/SessionId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - query
+              properties:
+                query:
+                  type: string
+                  description: The natural language question or query
+                  example: "What are the key findings about neural network architectures in the uploaded research papers?"
+                conversation_id:
+                  type: string
+                  description: Optional conversation ID to maintain chat history
+                  example: "conv_abc123"
+                model:
+                  type: string
+                  description: LLM model to use for generation
+                  example: "meta-llama/Llama-3.3-70B-Instruct"
+                temperature:
+                  type: number
+                  description: Sampling temperature (0.0 to 1.0)
+                  minimum: 0
+                  maximum: 1
+                  example: 0.7
+                max_tokens:
+                  type: integer
+                  description: Maximum number of tokens to generate
+                  example: 2048
+                top_p:
+                  type: number
+                  description: Nucleus sampling parameter
+                  minimum: 0
+                  maximum: 1
+                  example: 0.9
+            example:
+              query: "What are the key findings about neural network architectures in the uploaded research papers?"
+              model: "meta-llama/Llama-3.3-70B-Instruct"
+              temperature: 0.7
+              max_tokens: 2048
+      responses:
+        '200':
+          description: Streaming response from AI assistant
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                format: binary
+              example: |
+                data: {"type":"chunk","content":"Based on the"}
+
+                data: {"type":"chunk","content":" research papers"}
+
+                data: {"type":"chunk","content":", the key findings"}
+
+                data: {"type":"chunk","content":" about neural network architectures include:\n\n1. Transformer"}
+
+                data: {"type":"chunk","content":" architectures have"}
+
+                data: {"type":"done"}
+        '400':
+          description: Bad request - query is required
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: error
+                error: "query is required"
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          description: Error from Llama Stack server
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                status: error
+                error: "Error from Llama Stack server: Model not found"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: Backstage authentication token
+
+  parameters:
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      description: Vector store ID (session identifier)
+      schema:
+        type: string
+      example: "vs_1234567890abcdef"
+
+    DocumentId:
+      name: documentId
+      in: path
+      required: true
+      description: Document identifier (sanitized title)
+      schema:
+        type: string
+      example: "research-paper-on-neural-networks"
+
+  schemas:
+    SessionMetadata:
+      type: object
+      properties:
+        category:
+          type: string
+          description: Session category for organization
+          example: "analytics"
+        tags:
+          type: array
+          items:
+            type: string
+          description: Tags for filtering and search
+          example: ["data-science", "python"]
+        project:
+          type: string
+          description: Associated project name
+          example: "customer-insights"
+        document_ids:
+          type: array
+          items:
+            type: string
+          description: List of document IDs in this session
+          example: ["research-paper", "dataset-notes"]
+        embedding_model:
+          type: string
+          description: Embedding model used for this session
+          example: "sentence-transformers/nomic-ai/nomic-embed-text-v1.5"
+        embedding_dimension:
+          type: integer
+          description: Dimension of embedding vectors
+          example: 768
+        provider_id:
+          type: string
+          description: Vector store provider
+          example: "faiss"
+
+    NotebookSession:
+      type: object
+      required:
+        - session_id
+        - user_id
+        - name
+        - description
+        - created_at
+        - updated_at
+      properties:
+        session_id:
+          type: string
+          description: Unique session identifier (vector store ID)
+          example: "vs_1234567890abcdef"
+        user_id:
+          type: string
+          description: User who owns this session
+          example: "user:default/alice"
+        name:
+          type: string
+          description: Session name
+          example: "Data Analysis Project"
+        description:
+          type: string
+          description: Session description
+          example: "Analyzing customer behavior data"
+        created_at:
+          type: string
+          format: date-time
+          description: Session creation timestamp
+          example: "2026-03-04T10:30:00.000Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: "2026-03-04T10:30:00.000Z"
+        metadata:
+          $ref: '#/components/schemas/SessionMetadata'
+
+    SessionDocument:
+      type: object
+      required:
+        - document_id
+        - title
+        - session_id
+        - user_id
+        - source_type
+        - created_at
+      properties:
+        document_id:
+          type: string
+          description: Unique document identifier
+          example: "research-paper-on-neural-networks"
+        title:
+          type: string
+          description: Document title
+          example: "Research Paper on Neural Networks"
+        session_id:
+          type: string
+          description: Parent session ID
+          example: "vs_1234567890abcdef"
+        user_id:
+          type: string
+          description: User who uploaded this document
+          example: "user:default/alice"
+        source_type:
+          type: string
+          enum: [text, pdf, url, md, json, yaml, log]
+          description: Original file type
+          example: "pdf"
+        created_at:
+          type: string
+          format: date-time
+          description: Upload timestamp
+          example: "2026-03-04T10:35:00.000Z"
+        metadata:
+          type: object
+          description: Additional document metadata
+          additionalProperties: true
+
+    SessionResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success, error]
+          example: success
+        session:
+          $ref: '#/components/schemas/NotebookSession'
+        message:
+          type: string
+          example: "Session created successfully"
+        error:
+          type: string
+          description: Error message (only present on error)
+
+    SessionListResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success, error]
+          example: success
+        sessions:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotebookSession'
+        count:
+          type: integer
+          description: Number of sessions returned
+          example: 2
+        error:
+          type: string
+          description: Error message (only present on error)
+
+    DocumentResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success, error]
+          example: success
+        document_id:
+          type: string
+          description: Document identifier
+          example: "research-paper-on-neural-networks"
+        title:
+          type: string
+          description: Document title
+          example: "Research Paper on Neural Networks"
+        session_id:
+          type: string
+          description: Parent session ID
+          example: "vs_1234567890abcdef"
+        replaced:
+          type: boolean
+          description: Whether this replaced an existing document
+          example: false
+        message:
+          type: string
+          example: "Document created successfully"
+        error:
+          type: string
+          description: Error message (only present on error)
+
+    DocumentListResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success, error]
+          example: success
+        session_id:
+          type: string
+          description: Session ID
+          example: "vs_1234567890abcdef"
+        documents:
+          type: array
+          items:
+            $ref: '#/components/schemas/SessionDocument'
+        count:
+          type: integer
+          description: Number of documents returned
+          example: 3
+        error:
+          type: string
+          description: Error message (only present on error)
+
+    ErrorResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [error]
+          example: error
+        error:
+          type: string
+          description: Error message
+          example: "Session not found"
+
+  responses:
+    ForbiddenError:
+      description: Forbidden - insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: error
+            error: "Permission denied: ai.notebooks.use"
+
+    NotFoundError:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          examples:
+            sessionNotFound:
+              value:
+                status: error
+                error: "Session vs_1234567890abcdef has no metadata"
+            documentNotFound:
+              value:
+                status: error
+                error: "Document not found: research-paper"
+            accessDenied:
+              value:
+                status: error
+                error: "User user:default/bob does not have access to session vs_1234567890abcdef"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            status: error
+            error: "Error creating session: Connection to Llama Stack failed"
+
+security:
+  - BearerAuth: []

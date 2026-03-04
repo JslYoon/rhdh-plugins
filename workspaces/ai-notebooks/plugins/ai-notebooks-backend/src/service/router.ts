@@ -32,19 +32,14 @@ import { checkPermission, getUserRef } from './auth-helpers';
 import {
   aiNotebooksPermissions,
   aiNotebooksUsePermission,
-} from './permissions';
+} from '@red-hat-developer-hub/backstage-plugin-ai-notebooks-common';
 import {
   SessionResponse,
   SessionListResponse,
   DocumentResponse,
   DocumentListResponse,
-  QueryResponse,
 } from '../types';
-import {
-  isValidFileSize,
-  isValidFileType,
-  parseFile,
-} from './fileParser';
+import { isValidFileSize, isValidFileType, parseFile } from './fileParser';
 
 export interface RouterOptions {
   logger: LoggerService;
@@ -54,23 +49,15 @@ export interface RouterOptions {
   permissions: PermissionsService;
 }
 
-export async function createRouter(
-  options: RouterOptions,
-): Promise<Router> {
+export async function createRouter(options: RouterOptions): Promise<Router> {
   const { logger, config, httpAuth, userInfo, permissions } = options;
+  // eslint-disable-next-line new-cap -- Express Router is conventionally called without 'new'
   const router = Router();
   router.use(express.json());
 
   const llamaStackUrl =
     config.getOptionalString('aiNotebooks.llamaStack.url') ||
     'http://0.0.0.0:8321';
-  const notebookSystemPrompt = config.getOptionalString(
-    'aiNotebooks.systemPrompt',
-  );
-
-  // Extract port from Llama Stack URL
-  const urlMatch = llamaStackUrl.match(/:(\d+)/);
-  const port = urlMatch ? parseInt(urlMatch[1], 10) : 8321;
 
   logger.info(`AI Notebooks connecting to Llama Stack at ${llamaStackUrl}`);
 
@@ -95,6 +82,29 @@ export async function createRouter(
     }
   };
 
+  // Helper function to parse file from upload or URL
+  const parseFileContent = async (
+    fileType: string,
+    file: Express.Multer.File | undefined,
+    urlParam: string | undefined,
+  ) => {
+    if (fileType === 'url') {
+      if (!urlParam) {
+        throw new Error('URL is required when fileType is "url"');
+      }
+      logger.info(`Fetching URL ${urlParam} for fileType ${fileType}`);
+      return await parseFile(Buffer.from(''), urlParam, fileType);
+    }
+    if (!file) {
+      throw new Error('No file uploaded');
+    }
+    if (!isValidFileSize(file.size)) {
+      throw new Error('File size exceeds 20MB limit');
+    }
+    logger.info(`Parsing file ${file.originalname} for fileType ${fileType}`);
+    return await parseFile(file.buffer, file.originalname, fileType);
+  };
+
   const permissionIntegrationRouter = createPermissionIntegrationRouter({
     permissions: aiNotebooksPermissions,
   });
@@ -111,21 +121,20 @@ export async function createRouter(
    */
   router.post('/v1/sessions', async (req, res) => {
     try {
-      // await checkPermission(
-      //   req,
-      //   aiNotebooksUsePermission,
-      //   httpAuth,
-      //   permissions,
-      // );
+      await checkPermission(
+        req,
+        aiNotebooksUsePermission,
+        httpAuth,
+        permissions,
+      );
 
       const userId = await getUserRef(req, httpAuth, userInfo);
       const { name, description, metadata } = req.body;
-    
+
       if (!name) {
         res.status(400).json({ status: 'error', error: 'name is required' });
         return;
       }
-
       const session = await sessionService.createSession(
         userId,
         name,
@@ -140,13 +149,8 @@ export async function createRouter(
       };
 
       res.json(response);
-    } catch (error: any) {
-      logger.error(`Error creating session: ${error.message}`);
-      if (error instanceof NotAllowedError) {
-        res.status(403).json({ status: 'error', error: error.message });
-      } else {
-        res.status(500).json({ status: 'error', error: error.message });
-      }
+    } catch (error) {
+      handleError(res, error, 'Error creating session');
     }
   });
 
@@ -156,12 +160,12 @@ export async function createRouter(
    */
   router.get('/v1/sessions', async (req, res) => {
     try {
-      // await checkPermission(
-      //   req,
-      //   aiNotebooksUsePermission,
-      //   httpAuth,
-      //   permissions,
-      // );
+      await checkPermission(
+        req,
+        aiNotebooksUsePermission,
+        httpAuth,
+        permissions,
+      );
 
       const userId = await getUserRef(req, httpAuth, userInfo);
       const sessions = await sessionService.listSessions(userId);
@@ -200,13 +204,8 @@ export async function createRouter(
       };
 
       res.json(response);
-    } catch (error: any) {
-      logger.error(`Error listing sessions: ${error.message}`);
-      if (error instanceof NotAllowedError) {
-        res.status(403).json({ status: 'error', error: error.message });
-      } else {
-        res.status(500).json({ status: 'error', error: error.message });
-      }
+    } catch (error) {
+      handleError(res, error, 'Error listing sessions');
     }
   });
 
@@ -235,13 +234,8 @@ export async function createRouter(
       };
 
       res.json(response);
-    } catch (error: any) {
-      logger.error(`Error reading session: ${error.message}`);
-      if (error instanceof NotAllowedError) {
-        res.status(403).json({ status: 'error', error: error.message });
-      } else {
-        res.status(500).json({ status: 'error', error: error.message });
-      }
+    } catch (error) {
+      handleError(res, error, 'Error reading session');
     }
   });
 
@@ -251,12 +245,12 @@ export async function createRouter(
    */
   router.put('/v1/sessions/:sessionId', async (req, res) => {
     try {
-      // await checkPermission(
-      //   req,
-      //   aiNotebooksUsePermission,
-      //   httpAuth,
-      //   permissions,
-      // );
+      await checkPermission(
+        req,
+        aiNotebooksUsePermission,
+        httpAuth,
+        permissions,
+      );
 
       const userId = await getUserRef(req, httpAuth, userInfo);
       const { sessionId } = req.params;
@@ -277,13 +271,8 @@ export async function createRouter(
       };
 
       res.json(response);
-    } catch (error: any) {
-      logger.error(`Error updating session: ${error.message}`);
-      if (error instanceof NotAllowedError) {
-        res.status(403).json({ status: 'error', error: error.message });
-      } else {
-        res.status(500).json({ status: 'error', error: error.message });
-      }
+    } catch (error) {
+      handleError(res, error, 'Error updating session');
     }
   });
 
@@ -293,12 +282,12 @@ export async function createRouter(
    */
   router.delete('/v1/sessions/:sessionId', async (req, res) => {
     try {
-      // await checkPermission(
-      //   req,
-      //   aiNotebooksUsePermission,
-      //   httpAuth,
-      //   permissions,
-      // );
+      await checkPermission(
+        req,
+        aiNotebooksUsePermission,
+        httpAuth,
+        permissions,
+      );
 
       const userId = await getUserRef(req, httpAuth, userInfo);
       const { sessionId } = req.params;
@@ -313,13 +302,8 @@ export async function createRouter(
       };
 
       res.json(response);
-    } catch (error: any) {
-      logger.error(`Error deleting session: ${error.message}`);
-      if (error instanceof NotAllowedError) {
-        res.status(403).json({ status: 'error', error: error.message });
-      } else {
-        res.status(500).json({ status: 'error', error: error.message });
-      }
+    } catch (error) {
+      handleError(res, error, 'Error deleting session');
     }
   });
 
@@ -329,18 +313,18 @@ export async function createRouter(
    */
   router.post(
     '/v1/sessions/:sessionId/documents/upload',
-    upload.single('file'),
+    upload.single('file') as any,
     async (req, res) => {
       try {
-        // await checkPermission(
-        //   req,
-        //   aiNotebooksUsePermission,
-        //   httpAuth,
-        //   permissions,
-        // );
+        await checkPermission(
+          req,
+          aiNotebooksUsePermission,
+          httpAuth,
+          permissions,
+        );
 
         const userId = await getUserRef(req, httpAuth, userInfo);
-        const vectorDbId = req.params.vectorDbId as string;
+        const sessionId = req.params.sessionId as string;
         const fileType = req.body.fileType as string;
         const customTitle = req.body.title as string | undefined;
 
@@ -352,63 +336,17 @@ export async function createRouter(
           return;
         }
 
-        const session = await sessionService.readSession(vectorDbId, userId);
-
-        let parsedDocument;
-        let documentTitle;
-
-        if (fileType === 'url') {
-          const url = req.body.file as string | undefined;
-
-          if (!url) {
-            res.status(400).json({
-              status: 'error',
-              error: 'file field is required for URL type',
-            });
-            return;
-          }
-
-          logger.info(
-            `Fetching URL ${url} (${fileType}) for session ${vectorDbId}`,
-          );
-
-          parsedDocument = await parseFile(Buffer.from(''), url, fileType);
-          documentTitle = customTitle || parsedDocument.metadata.fileName;
-        } else {
-          if (!req.file) {
-            res
-              .status(400)
-              .json({ status: 'error', error: 'No file uploaded' });
-            return;
-          }
-
-          if (!isValidFileSize(req.file.size)) {
-            res.status(400).json({
-              status: 'error',
-              error: 'File size exceeds 20MB limit',
-            });
-            return;
-          }
-
-          logger.info(
-            `Parsing file ${req.file.originalname} (${fileType}) for session ${vectorDbId}`,
-          );
-
-          parsedDocument = await parseFile(
-            req.file.buffer,
-            req.file.originalname,
-            fileType,
-          );
-          documentTitle =
-            customTitle ||
-            parsedDocument.metadata.fileName.replace(/\.[^/.]+$/, '');
-        }
-
-        logger.info(`Upserting document with title: ${documentTitle}`);
+        const parsedDocument = await parseFileContent(
+          fileType,
+          req.file,
+          req.body.file,
+        );
+        const documentTitle =
+          customTitle ||
+          parsedDocument.metadata.fileName.replace(/\.[^/.]+$/, '');
 
         const result = await documentService.uploadDocument(
-          session.vector_db_id,
-          vectorDbId,
+          sessionId,
           userId,
           documentTitle,
           parsedDocument.content,
@@ -419,12 +357,9 @@ export async function createRouter(
           status: 'success',
           document_id: result.document_id,
           title: documentTitle,
-          session_id: vectorDbId,
-          chunks_created: result.chunks_created,
-          replaced: result.replaced,
-          message: result.replaced
-            ? 'Document updated successfully'
-            : 'Document created successfully',
+          session_id: sessionId,
+          replaced: false,
+          message: 'Document created successfully',
         };
 
         res.json(response);
@@ -440,29 +375,29 @@ export async function createRouter(
    */
   router.get('/v1/sessions/:sessionId/documents', async (req, res) => {
     try {
-      // await checkPermission(
-      //   req,
-      //   aiNotebooksUsePermission,
-      //   httpAuth,
-      //   permissions,
-      // );
+      await checkPermission(
+        req,
+        aiNotebooksUsePermission,
+        httpAuth,
+        permissions,
+      );
 
       const userId = await getUserRef(req, httpAuth, userInfo);
-      const vectorDbId = req.params.vectorDbId as string;
+      const sessionId = req.params.sessionId as string;
       const fileType = req.query.fileType as string | undefined;
 
-      const session = await sessionService.readSession(vectorDbId, userId);
+      // Validate session exists and user has access
+      await sessionService.readSession(sessionId, userId);
 
       const documents = await documentService.listDocuments(
-        session.vector_db_id,
-        vectorDbId,
+        sessionId,
         userId,
         fileType,
       );
 
       const response: DocumentListResponse = {
         status: 'success',
-        session_id: vectorDbId,
+        session_id: sessionId,
         documents,
         count: documents.length,
       };
@@ -474,22 +409,144 @@ export async function createRouter(
   });
 
   /**
+   * PUT /v1/sessions/:sessionId/documents/:documentId
+   * Update a document's title and/or content
+   * - To update only title: provide only "title" parameter
+   * - To update content: must provide file upload or URL (not direct content)
+   */
+  router.put(
+    '/v1/sessions/:sessionId/documents/:documentId',
+    upload.single('file') as any,
+    async (req, res) => {
+      try {
+        await checkPermission(
+          req,
+          aiNotebooksUsePermission,
+          httpAuth,
+          permissions,
+        );
+
+        const userId = await getUserRef(req, httpAuth, userInfo);
+        const sessionId = req.params.sessionId as string;
+        const currentDocumentId = req.params.documentId as string;
+        const newTitle = req.body.title as string | undefined;
+        const fileType = req.body.fileType as string | undefined;
+
+        let content: string | undefined;
+
+        // Handle content updates - must be file upload or URL
+        if (fileType) {
+          if (!isValidFileType(fileType)) {
+            res.status(400).json({
+              status: 'error',
+              error: `Unsupported file type: ${fileType}`,
+            });
+            return;
+          }
+
+          const parsedDocument = await parseFileContent(
+            fileType,
+            req.file,
+            req.body.file,
+          );
+          content = parsedDocument.content;
+        }
+
+        // Validate: at least title or content must be provided
+        if (!newTitle && !content) {
+          res.status(400).json({
+            status: 'error',
+            error:
+              'At least one of title or file/URL must be provided for update',
+          });
+          return;
+        }
+
+        const result = await documentService.updateDocument(
+          sessionId,
+          userId,
+          currentDocumentId,
+          newTitle,
+          content,
+          { fileType: fileType || 'text' },
+        );
+
+        const response: DocumentResponse = {
+          status: 'success',
+          document_id: result.document_id,
+          title: newTitle || currentDocumentId,
+          session_id: sessionId,
+          replaced: true,
+          message: 'Document updated successfully',
+        };
+
+        res.json(response);
+      } catch (error) {
+        handleError(res, error, 'Error updating document');
+      }
+    },
+  );
+
+  /**
+   * POST /v1/sessions/:sessionId/query
+   * Send a query to the AI assistant for notebook/session conversations
+   * Uses session-specific vector store with uploaded documents and notebook system prompts
+   */
+  /**
+   * DELETE /v1/sessions/:sessionId/documents/:documentId
+   * Delete a document from a session
+   */
+  router.delete(
+    '/v1/sessions/:sessionId/documents/:documentId',
+    async (req, res) => {
+      try {
+        await checkPermission(
+          req,
+          aiNotebooksUsePermission,
+          httpAuth,
+          permissions,
+        );
+
+        const userId = await getUserRef(req, httpAuth, userInfo);
+        const sessionId = req.params.sessionId as string;
+        const documentId = req.params.documentId as string;
+
+        // Validate session exists and user has access
+        await sessionService.readSession(sessionId, userId);
+
+        await documentService.deleteDocument(sessionId, documentId);
+
+        const response: DocumentResponse = {
+          status: 'success',
+          document_id: documentId,
+          session_id: sessionId,
+          message: 'Document deleted successfully',
+        };
+
+        res.json(response);
+      } catch (error) {
+        handleError(res, error, 'Error deleting document');
+      }
+    },
+  );
+
+  /**
    * POST /v1/sessions/:sessionId/query
    * Send a query to the AI assistant for notebook/session conversations
    * Uses session-specific vector store with uploaded documents and notebook system prompts
    */
   router.post('/v1/sessions/:sessionId/query', async (req, res) => {
     try {
-      // await checkPermission(
-      //   req,
-      //   aiNotebooksUsePermission,
-      //   httpAuth,
-      //   permissions,
-      // );
+      await checkPermission(
+        req,
+        aiNotebooksUsePermission,
+        httpAuth,
+        permissions,
+      );
 
       const userId = await getUserRef(req, httpAuth, userInfo);
-      const vectorDbId = req.params.sessionId as string;
-      const { provider, query } = req.body;
+      const sessionId = req.params.sessionId as string;
+      const { query } = req.body;
 
       if (!query) {
         res.status(400).json({ status: 'error', error: 'query is required' });
@@ -497,28 +554,19 @@ export async function createRouter(
       }
 
       logger.info(
-        `/sessions/${vectorDbId}/query (notebook) receives call from user: ${userId} for vectorDbId: ${vectorDbId}`,
+        `/sessions/${sessionId}/query receives call from user: ${userId}`,
       );
-      console.log("vectorDbId asdf", vectorDbId);
-      // Verify session exists and user has access
-      // const session = await sessionService.readSession(vectorDbId, userId);
 
-      // console.log("session asdf", session);
-      // const userQueryParam = `user_id=${encodeURIComponent(userId)}`;
-      // req.body.media_type = 'application/json';
+      // Add vector store IDs for RAG
+      req.body.vector_store_ids = [sessionId];
+      const sanitizedUserId = userId
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
 
-      // // Apply notebook system prompt if configured
-      // if (notebookSystemPrompt && notebookSystemPrompt.trim().length > 0) {
-      //   req.body.system_prompt = notebookSystemPrompt;
-      // }
-
-      // // Add vector store IDs for RAG
-      req.body.vector_store_ids = [vectorDbId];
-
-      // Prefix conversation_id with "nb-" to separate notebook from other conversations
+      // Prefix conversation_id with "notebooks-" to separate notebook from other conversations
       if (req.body.conversation_id) {
-        if (!req.body.conversation_id.startsWith('nb-')) {
-          req.body.conversation_id = `nb-${req.body.conversation_id}`;
+        if (!req.body.conversation_id.startsWith('notebooks-')) {
+          req.body.conversation_id = `notebooks-${sessionId}-${sanitizedUserId}`;
         }
       }
 
@@ -527,7 +575,7 @@ export async function createRouter(
 
       const requestBody = JSON.stringify(req.body);
       const fetchResponse = await fetch(
-        `http://0.0.0.0:8080/v1/streaming_query?${userQueryParam}`,
+        `http://0.0.0.0:8080/v1/streaming_query`,
         {
           method: 'POST',
           headers: {
@@ -539,7 +587,11 @@ export async function createRouter(
 
       if (!fetchResponse.ok) {
         const errorBody = await fetchResponse.json();
-        const errormsg = `Error from Llama Stack server: ${errorBody.error?.message || errorBody?.detail?.cause || 'Unknown error'}`;
+        const errormsg = `Error from Llama Stack server: ${
+          errorBody.error?.message ||
+          errorBody?.detail?.cause ||
+          'Unknown error'
+        }`;
         logger.error(errormsg);
 
         res.status(500).json({

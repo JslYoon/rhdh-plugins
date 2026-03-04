@@ -38,14 +38,14 @@ export interface Config {
       /**
        * Embedding model ID (must be registered in Llama Stack)
        * @visibility backend
-       * @default granite-embedding-125m-english
+       * @default sentence-transformers/nomic-ai/nomic-embed-text-v1.5
        */
       embeddingModel?: string;
 
       /**
        * Embedding dimension (must match the model)
        * @visibility backend
-       * @default 768
+       * @default 384
        */
       embeddingDimension?: number;
 
@@ -56,8 +56,8 @@ export interface Config {
         /**
          * Vector database provider ID
          * @visibility backend
-         * @default milvus
-         * @remarks Available providers: milvus (default), faiss (requires ENABLE_FAISS=true), pgvector, qdrant-remote, milvus-remote
+         * @default faiss
+         * @remarks Available providers: faiss (default), milvus (requires ENABLE_FAISS=true), pgvector, qdrant-remote, milvus-remote
          */
         providerId?: string;
       };

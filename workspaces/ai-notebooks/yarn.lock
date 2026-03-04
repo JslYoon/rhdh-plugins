@@ -4372,7 +4372,7 @@ __metadata:
     "@changesets/cli": "npm:^2.27.1"
     "@spotify/prettier-config": "npm:^12.0.0"
     knip: "npm:^5.27.4"
-    llama-stack-client: "npm:^0.3.4"
+    llama-stack-client: "npm:^0.5.0"
     node-gyp: "npm:^9.0.0"
     prettier: "npm:^2.3.2"
     typescript: "npm:~5.3.0"
@@ -6769,6 +6769,7 @@ __metadata:
     "@backstage/errors": "npm:^1.2.7"
     "@backstage/plugin-permission-common": "npm:^0.9.1"
     "@backstage/plugin-permission-node": "npm:^0.10.3"
+    "@red-hat-developer-hub/backstage-plugin-ai-notebooks-common": "workspace:^"
     "@types/express": "npm:4.17.25"
     "@types/js-yaml": "npm:^4.0.5"
     "@types/multer": "npm:^1.4.12"
@@ -6776,11 +6777,20 @@ __metadata:
     express: "npm:^4.21.1"
     express-promise-router: "npm:^4.1.0"
     js-yaml: "npm:^4.1.0"
-    llama-stack-client: "npm:^0.3.4"
+    llama-stack-client: "npm:^0.5.0"
     multer: "npm:^1.4.5-lts.1"
     node-fetch: "npm:2.7.0"
     pdfjs-dist: "npm:^4.10.38"
     supertest: "npm:6.3.4"
+  languageName: unknown
+  linkType: soft
+
+"@red-hat-developer-hub/backstage-plugin-ai-notebooks-common@workspace:^, @red-hat-developer-hub/backstage-plugin-ai-notebooks-common@workspace:plugins/ai-notebooks-common":
+  version: 0.0.0-use.local
+  resolution: "@red-hat-developer-hub/backstage-plugin-ai-notebooks-common@workspace:plugins/ai-notebooks-common"
+  dependencies:
+    "@backstage/cli": "npm:^0.34.1"
+    "@backstage/plugin-permission-common": "npm:^0.9.1"
   languageName: unknown
   linkType: soft
 
@@ -17798,9 +17808,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"llama-stack-client@npm:^0.3.4":
-  version: 0.3.5
-  resolution: "llama-stack-client@npm:0.3.5"
+"llama-stack-client@npm:^0.5.0":
+  version: 0.5.1
+  resolution: "llama-stack-client@npm:0.5.1"
   dependencies:
     "@types/node": "npm:^18.11.18"
     "@types/node-fetch": "npm:^2.6.4"
@@ -17809,7 +17819,7 @@ __metadata:
     form-data-encoder: "npm:1.7.2"
     formdata-node: "npm:^4.3.2"
     node-fetch: "npm:^2.6.7"
-  checksum: 10/89ad5f5e4f404cb873fba3357461561cd13e816985637b0336e3548768f5de4ac63bee848a6a7ae52e0f291b619f7ba700e7ddd22d42562c687df676bf94e93f
+  checksum: 10/1f11cb72523f04ec7f9314ca840fe86703246cd753bdac6c70a8118a12a75d2b9c22fd38ddc60204b84857e6bc296a61571819db54420094399434ec5a6b7998
   languageName: node
   linkType: hard
 

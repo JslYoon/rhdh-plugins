@@ -60,7 +60,7 @@ aiNotebooks:
     # Embedding model configuration (must match Llama Stack 0.5 distribution)
     # Default model in 0.5.0+rhai0: granite-embedding-125m-english (768 dimensions)
     # Use 'client.models.list()' to see available models in your Llama Stack
-    embeddingModel: ${AI_NOTEBOOKS_EMBEDDING_MODEL:-granite-embedding-125m-english}
+    embeddingModel: ${AI_NOTEBOOKS_EMBEDDING_MODEL:-sentence-transformers/nomic-ai/nomic-embed-text-v1.5}
     embeddingDimension: ${AI_NOTEBOOKS_EMBEDDING_DIMENSION:-768}
 
     # Vector IO provider configuration
@@ -68,7 +68,7 @@ aiNotebooks:
       # Default provider in Llama Stack 0.5.0+rhai0: milvus
       # Available providers: milvus (default), faiss (requires ENABLE_FAISS=true),
       #                      pgvector, qdrant-remote, milvus-remote
-      providerId: ${AI_NOTEBOOKS_VECTOR_PROVIDER:-milvus}
+      providerId: ${AI_NOTEBOOKS_VECTOR_PROVIDER:-faiss}
 
   # Optional system prompt for notebook queries
   # systemPrompt: "You are an AI assistant helping with notebook queries."

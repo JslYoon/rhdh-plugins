@@ -19,12 +19,10 @@ import { Config } from '@backstage/config';
 import { LlamaStackClient } from 'llama-stack-client';
 import { NotebookSession, SessionMetadata } from '../types';
 
-const SESSION_METADATA_DOC_ID = '__session_metadata__';
-
 /**
- * Service for managing notebook sessions with dedicated vector databases
- * - Session ID format: session-{sanitized_user_id}-{timestamp}-{random}
- * - Metadata stored as special chunk for persistence
+ * Service for managing notebook sessions with dedicated vector stores
+ * - Session ID is the Llama Stack vector store ID
+ * - Session metadata stored in VectorStore metadata field
  * - Uses ONLY Llama Stack APIs (no direct database access)
  */
 export class SessionService {
@@ -41,7 +39,7 @@ export class SessionService {
     // Read from config or use Llama Stack 0.5 distribution defaults
     this.embeddingModel =
       config?.getOptionalString('aiNotebooks.llamaStack.embeddingModel') ||
-      'granite-embedding-125m-english';
+      'sentence-transformers/nomic-ai/nomic-embed-text-v1.5';
 
     this.embeddingDimension =
       config?.getOptionalNumber('aiNotebooks.llamaStack.embeddingDimension') ||
@@ -49,85 +47,52 @@ export class SessionService {
 
     this.providerId =
       config?.getOptionalString('aiNotebooks.llamaStack.vectorIo.providerId') ||
-      'milvus';
+      'faiss';
   }
 
-  private sanitizeUserId(userId: string): string {
-    return userId
-      .trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
+  /**
+   * Build VectorStore metadata object from session data
+   */
+  private buildVectorStoreMetadata(
+    session: NotebookSession,
+  ): Record<string, any> {
+    return {
+      user_id: session.user_id,
+      name: session.name,
+      description: session.description,
+      created_at: session.created_at,
+      updated_at: session.updated_at,
+      embedding_model: this.embeddingModel,
+      embedding_dimension: this.embeddingDimension,
+      provider_id: this.providerId,
+      ...(session.metadata || {}),
+    };
   }
 
-  private generateSessionId(userId: string): string {
-    const sanitized = this.sanitizeUserId(userId);
-    const timestamp = Date.now();
-    const random = Math.random().toString(36).substring(2, 11);
-    return `session-${sanitized}-${timestamp}-${random}`;
-  }
-
-  private async storeMetadata(session: NotebookSession): Promise<void> {
-    await this.client.vectorIo.insert({
-      vector_db_id: session.vector_db_id,
-      chunks: [
-        {
-          content: JSON.stringify(session),
-          metadata: {
-            type: 'session_metadata',
-            document_id: SESSION_METADATA_DOC_ID,
-          },
-          chunk_metadata: {
-            chunk_id: SESSION_METADATA_DOC_ID,
-            document_id: SESSION_METADATA_DOC_ID,
-          },
-        },
-      ],
-    });
-  }
-
-  private async retrieveMetadata(
-    vectorDbId: string,
-  ): Promise<NotebookSession | null> {
-    try {
-      const result = await this.client.vectorIo.query({
-        vector_db_id: vectorDbId,
-        query: SESSION_METADATA_DOC_ID,
-        params: { max_chunks: 10 },
-      });
-
-      // Filter for all session metadata chunks
-      const metadataChunks = result.chunks?.filter(
-        c => c.chunk_metadata?.chunk_id === SESSION_METADATA_DOC_ID,
-      ) || [];
-
-      if (metadataChunks.length === 0) return null;
-
-      // Parse all metadata chunks and sort by updated_at to get the most recent
-      const sessions = metadataChunks
-        .map(chunk => {
-          try {
-            const content =
-              typeof chunk.content === 'string'
-                ? chunk.content
-                : JSON.stringify(chunk.content);
-            return JSON.parse(content) as NotebookSession;
-          } catch (parseError) {
-            this.logger.warn(`Failed to parse metadata chunk: ${parseError}`);
-            return null;
-          }
-        })
-        .filter((session): session is NotebookSession => session !== null)
-        .sort((a, b) =>
-          new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()
-        );
-
-      // Return the most recent session metadata
-      return sessions.length > 0 ? sessions[0] : null;
-    } catch (error) {
-      this.logger.error(`Failed to retrieve session metadata: ${error}`);
-      return null;
-    }
+  /**
+   * Extract session data from VectorStore metadata
+   */
+  private extractSessionFromMetadata(
+    sessionId: string,
+    metadata: Record<string, any>,
+  ): NotebookSession {
+    return {
+      session_id: sessionId,
+      user_id: metadata.user_id as string,
+      name: metadata.name as string,
+      description: metadata.description as string,
+      created_at: metadata.created_at as string,
+      updated_at: metadata.updated_at as string,
+      metadata: {
+        category: metadata.category,
+        tags: metadata.tags,
+        project: metadata.project,
+        document_ids: metadata.document_ids,
+        embedding_model: metadata.embedding_model,
+        embedding_dimension: metadata.embedding_dimension,
+        provider_id: metadata.provider_id,
+      },
+    };
   }
 
   async createSession(
@@ -136,51 +101,65 @@ export class SessionService {
     description?: string,
     metadata?: SessionMetadata,
   ): Promise<NotebookSession> {
-    const sessionId = this.generateSessionId(userId);
     const now = new Date().toISOString();
 
-    this.logger.info(`Creating session ${sessionId} for user ${userId}`);
+    this.logger.info(`Creating session for user ${userId}`);
 
-    // Register a new vector database for this session
-    const vectorStore = await this.client.vectorStores.create({
-      name: sessionId,
-      embedding_model: this.embeddingModel,
-      embedding_dimension: this.embeddingDimension,
-      provider_id: this.providerId,
-      metadata: {
-        user_id: userId,
-      },
-    });
-
-    const session: NotebookSession = {
-      session_id: sessionId,
+    // Build temporary session object to generate metadata
+    const tempSession: NotebookSession = {
+      session_id: 'temp', // Will be replaced with actual ID
       user_id: userId,
       name,
       description: description || '',
-      vector_db_id: vectorStore.id,
       created_at: now,
       updated_at: now,
-      metadata,
+      metadata: {
+        ...metadata,
+        document_ids: [],
+      },
     };
 
-    // Store session metadata as a special chunk
-    await this.storeMetadata(session);
+    // Create vector store with embedding config AND metadata in one call
+    const vectorStore = await this.client.vectorStores.create({
+      name: name || `Session for ${userId}`,
+      embedding_model: this.embeddingModel,
+      embedding_dimension: this.embeddingDimension,
+      provider_id: this.providerId,
+      metadata: this.buildVectorStoreMetadata(tempSession),
+    });
+
+    const sessionId = vectorStore.id;
+
+    // Build final session object with actual ID
+    const session: NotebookSession = {
+      ...tempSession,
+      session_id: sessionId,
+    };
+
+    this.logger.info(`Created session ${sessionId} for user ${userId}`);
     return session;
   }
 
   async readSession(
-    vectorDbId: string,
+    sessionId: string,
     userId: string,
   ): Promise<NotebookSession> {
-    const session = await this.retrieveMetadata(vectorDbId);
-    if (!session) {
-      throw new Error(`Session ${vectorDbId} not found`);
+    // Retrieve vector store to get metadata
+    const vectorStore = await this.client.vectorStores.retrieve(sessionId);
+
+    if (!vectorStore.metadata) {
+      throw new Error(`Session ${sessionId} has no metadata`);
     }
+
+    const session = this.extractSessionFromMetadata(
+      sessionId,
+      vectorStore.metadata as Record<string, any>,
+    );
 
     // Verify ownership
     if (session.user_id !== userId) {
       throw new Error(
-        `User ${userId} does not have access to session ${vectorDbId}`,
+        `User ${userId} does not have access to session ${sessionId}`,
       );
     }
 
@@ -188,46 +167,60 @@ export class SessionService {
   }
 
   async updateSession(
-    vectorDbId: string,
+    sessionId: string,
     userId: string,
     name?: string,
     description?: string,
     metadata?: SessionMetadata,
   ): Promise<NotebookSession> {
-    const existing = await this.readSession(vectorDbId, userId);
+    const existing = await this.readSession(sessionId, userId);
 
     const updated: NotebookSession = {
       ...existing,
-      name: name || existing.name,
+      name: name !== undefined ? name : existing.name,
       description:
         description !== undefined ? description : existing.description,
       metadata: metadata !== undefined ? metadata : existing.metadata,
       updated_at: new Date().toISOString(),
     };
 
-    await this.storeMetadata(updated);
+    // Update vector store metadata
+    await this.client.vectorStores.update(sessionId, {
+      metadata: this.buildVectorStoreMetadata(updated),
+    });
+
     return updated;
   }
 
-  async deleteSession(vectorDbId: string, userId: string): Promise<void> {
+  async deleteSession(sessionId: string, userId: string): Promise<void> {
     // Verify ownership before deletion
-    const session = await this.readSession(vectorDbId, userId);
+    await this.readSession(sessionId, userId);
 
-    // Unregister the vector database
-    await this.client.vectorStores.delete(session.vector_db_id);
-    this.logger.info(`Session ${vectorDbId} deleted`);
+    // Unregister the vector store
+    await this.client.vectorStores.delete(sessionId);
+    this.logger.info(`Session ${sessionId} deleted`);
   }
 
   async listSessions(userId: string): Promise<NotebookSession[]> {
-    const vectorDbs = (await this.client.vectorStores.list()).data;
+    // List all vector stores - the new API returns a paginated response
+    const vectorStoresPage = await this.client.vectorStores.list();
+    const vectorStores = vectorStoresPage.data;
+
     const sessions: NotebookSession[] = [];
-    for (const db of vectorDbs) {
-      const session_user_id = db.metadata?.user_id as string || '';
-      // Filter by user's session prefix
-      if (session_user_id === userId) {
-        const session = await this.retrieveMetadata(db.id);
-        if (session?.user_id === userId) {
+    for (const store of vectorStores) {
+      // Filter by user ID from metadata
+      const session_user_id = (store.metadata?.user_id as string) || '';
+      if (session_user_id === userId && store.metadata) {
+        try {
+          const session = this.extractSessionFromMetadata(
+            store.id,
+            store.metadata as Record<string, any>,
+          );
           sessions.push(session);
+        } catch (error) {
+          this.logger.warn(
+            `Failed to extract session from vector store ${store.id}: ${error}`,
+          );
         }
       }
     }
