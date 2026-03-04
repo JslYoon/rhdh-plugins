@@ -23,7 +23,7 @@ import {
   Tooltip,
   PieLabelRenderProps,
 } from 'recharts';
-import { PieData } from '../../utils/utils';
+import type { PieData } from '../types';
 
 interface PieTooltipPayload {
   name?: string;
@@ -46,27 +46,51 @@ export interface PieLegendContentProps {
 
 interface PieTooltipContentProps {
   active?: boolean;
+  coordinate?: { x: number; y: number };
   payload?: readonly PieTooltipPayload[];
   label?: string | number;
 }
 interface ResponsivePieChartProps {
   pieData: PieData[];
-  isMissingPermission?: boolean;
   LabelContent?: (props: PieLabelRenderProps) => React.ReactNode;
   legendContent: (props: PieLegendContentProps) => React.ReactNode;
   tooltipContent: (props: PieTooltipContentProps) => React.ReactNode;
+  isErrorState?: boolean;
+  setIsInsidePieCircle?: (isInside: boolean) => void;
 }
 
 export const ResponsivePieChart = ({
   pieData,
-  isMissingPermission = false,
   LabelContent,
   legendContent,
   tooltipContent,
+  isErrorState,
+  setIsInsidePieCircle,
 }: ResponsivePieChartProps) => {
   return (
     <ResponsiveContainer style={{ outline: 'none' }}>
       <PieChart responsive>
+        {/* This is the circle that is used to trigger the tooltip */}
+        {isErrorState && (
+          <g>
+            <circle
+              cx="30%"
+              cy="50%"
+              r={90}
+              fill="transparent"
+              style={{ cursor: 'pointer' }}
+              onMouseEnter={e => {
+                setIsInsidePieCircle?.(true);
+                e.stopPropagation?.();
+              }}
+              onMouseLeave={e => {
+                setIsInsidePieCircle?.(false);
+                e.stopPropagation();
+              }}
+            />
+          </g>
+        )}
+
         <Pie
           data={pieData}
           dataKey="value"
@@ -81,8 +105,14 @@ export const ResponsivePieChart = ({
           cursor="pointer"
           isAnimationActive={false}
           labelLine={false}
-          label={isMissingPermission && LabelContent ? LabelContent : undefined}
+          label={LabelContent}
           style={{ outline: 'none' }}
+          onMouseEnter={() => {
+            setIsInsidePieCircle?.(true);
+          }}
+          onMouseLeave={() => {
+            setIsInsidePieCircle?.(false);
+          }}
         >
           {pieData.map(category => (
             <Cell key={category.name} fill={category.color} />

@@ -13,6 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+import { DEFAULT_NUMBER_THRESHOLDS } from '@red-hat-developer-hub/backstage-plugin-scorecard-common';
+
 export const customScorecardResponse = [
   {
     id: 'github.open_prs',
@@ -171,48 +173,90 @@ export const invalidThresholdResponse = [
 ];
 
 // Aggregated scorecard responses (15 GitHub entities, 10 Jira entities)
-export const githubAggregatedResponse = [
-  {
-    id: 'github.open_prs',
-    status: 'success',
-    metadata: {
-      title: 'GitHub open PRs',
-      description:
-        'Current count of open Pull Requests for a given GitHub repository.',
-      type: 'number',
-      history: true,
-    },
-    result: {
-      values: [
-        { count: 5, name: 'success' },
-        { count: 7, name: 'warning' },
-        { count: 3, name: 'error' },
-      ],
-      total: 15,
-      timestamp: '2026-01-24T14:10:32.858Z',
-    },
+export const githubAggregatedResponse = {
+  id: 'github.open_prs',
+  status: 'success',
+  metadata: {
+    title: 'GitHub open PRs',
+    description:
+      'Current count of open Pull Requests for a given GitHub repository.',
+    type: 'number',
+    history: true,
   },
-];
+  result: {
+    values: [
+      { count: 5, name: 'success' },
+      { count: 7, name: 'warning' },
+      { count: 3, name: 'error' },
+    ],
+    total: 15,
+    timestamp: '2026-01-24T14:10:32.858Z',
+    thresholds: DEFAULT_NUMBER_THRESHOLDS,
+  },
+};
 
-export const jiraAggregatedResponse = [
-  {
-    id: 'jira.open_issues',
-    status: 'success',
-    metadata: {
-      title: 'Jira open blocking tickets',
-      description:
-        'Highlights the number of issues that are currently open in Jira.',
-      type: 'number',
-      history: true,
-    },
-    result: {
-      values: [
-        { count: 6, name: 'success' },
-        { count: 3, name: 'warning' },
-        { count: 1, name: 'error' },
-      ],
-      total: 10,
-      timestamp: '2026-01-24T14:10:32.776Z',
-    },
+export const jiraAggregatedResponse = {
+  id: 'jira.open_issues',
+  status: 'success',
+  metadata: {
+    title: 'Jira open blocking tickets',
+    description:
+      'Highlights the number of issues that are currently open in Jira.',
+    type: 'number',
+    history: true,
   },
-];
+  result: {
+    values: [
+      { count: 6, name: 'success' },
+      { count: 3, name: 'warning' },
+      { count: 1, name: 'error' },
+    ],
+    total: 10,
+    timestamp: '2026-01-24T14:10:32.776Z',
+    thresholds: DEFAULT_NUMBER_THRESHOLDS,
+  },
+};
+
+export const emptyJiraAggregatedResponse = {
+  id: 'jira.open_issues',
+  status: 'success',
+  metadata: {
+    title: 'Jira open blocking tickets',
+    description:
+      'Highlights the number of critical, blocking issues that are currently open in Jira.',
+    type: 'number',
+    history: true,
+  },
+  result: {
+    total: 0,
+    values: [
+      { count: 0, name: 'success' },
+      { count: 0, name: 'warning' },
+      { count: 0, name: 'error' },
+    ],
+    timestamp: '2026-01-24T14:10:32.858Z',
+    thresholds: DEFAULT_NUMBER_THRESHOLDS,
+  },
+};
+
+export const emptyGithubAggregatedResponse = {
+  id: 'github.open_prs',
+  status: 'success',
+  metadata: {
+    title: 'GitHub open PRs',
+    description:
+      'Current count of open Pull Requests for a given GitHub repository.',
+    type: 'number',
+    history: true,
+  },
+  result: {
+    total: 0,
+    values: [
+      { count: 0, name: 'success' },
+      { count: 0, name: 'warning' },
+      { count: 0, name: 'error' },
+    ],
+    timestamp: '2026-01-24T14:10:32.858Z',
+    thresholds: DEFAULT_NUMBER_THRESHOLDS,
+  },
+};

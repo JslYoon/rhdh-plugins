@@ -13,7 +13,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { InputError, NotAllowedError, NotFoundError } from '@backstage/errors';
+import {
+  AuthenticationError,
+  InputError,
+  NotAllowedError,
+} from '@backstage/errors';
 import express, { Request } from 'express';
 import Router from 'express-promise-router';
 import type { CatalogMetricService } from './CatalogMetricService';
@@ -39,6 +43,7 @@ import { validateCatalogMetricsSchema } from '../validation/validateCatalogMetri
 import { getEntitiesOwnedByUser } from '../utils/getEntitiesOwnedByUser';
 import { parseCommaSeparatedString } from '../utils/parseCommaSeparatedString';
 import { validateMetricsSchema } from '../validation/validateMetricsSchema';
+import { AggregatedMetricMapper } from './mappers';
 
 export type ScorecardRouterOptions = {
   metricProvidersRegistry: MetricProvidersRegistry;
@@ -151,7 +156,8 @@ export async function createRouter({
       scorecardMetricReadPermission,
     );
 
-    const metric = metricProvidersRegistry.getMetric(metricId);
+    const provider = metricProvidersRegistry.getProvider(metricId);
+    const metric = provider.getMetric();
     const authorizedMetrics = filterAuthorizedMetrics([metric], conditions);
 
     if (authorizedMetrics.length === 0) {
@@ -164,7 +170,7 @@ export async function createRouter({
     const userEntityRef = credentials?.principal?.userEntityRef;
 
     if (!userEntityRef) {
-      throw new NotFoundError('User entity reference not found');
+      throw new AuthenticationError('User entity reference not found');
     }
 
     const entitiesOwnedByAUser = await getEntitiesOwnedByUser(userEntityRef, {
@@ -172,23 +178,24 @@ export async function createRouter({
       credentials,
     });
 
-    if (entitiesOwnedByAUser.length === 0) {
-      res.json([]);
-      return;
-    }
-
     for (const entityRef of entitiesOwnedByAUser) {
       await checkEntityAccess(entityRef, req, permissions, httpAuth);
     }
 
-    const aggregatedMetrics =
-      await catalogMetricService.getAggregatedMetricsByEntityRefs(
+    const thresholds = provider.getMetricThresholds();
+    const aggregatedMetric =
+      await catalogMetricService.getAggregatedMetricByEntityRefs(
         entitiesOwnedByAUser,
-        [metricId],
-        conditions,
+        metricId,
       );
 
-    res.json(aggregatedMetrics);
+    res.json(
+      AggregatedMetricMapper.toAggregatedMetricResult(
+        metric,
+        thresholds,
+        aggregatedMetric,
+      ),
+    );
   });
 
   return router;

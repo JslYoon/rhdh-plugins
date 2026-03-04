@@ -1,5 +1,23 @@
 # @red-hat-developer-hub/backstage-plugin-scorecard-common
 
+## 2.4.0
+
+### Minor Changes
+
+- 7062658: Introduces custom threshold rule keys and colors that can be configured in `app-config.yaml`.
+
+## 2.3.5
+
+## 2.3.4
+
+### Patch Changes
+
+- 4a3369f: Fix aggregated scorecard widgets view when entities are missing value or metric fetching fails.
+
+  Refactor the /metrics/:metricId/catalog/aggregations endpoint to return an object of aggregated metrics instead of an array containing a single object.
+
+## 2.3.3
+
 ## 2.3.2
 
 ## 2.3.1

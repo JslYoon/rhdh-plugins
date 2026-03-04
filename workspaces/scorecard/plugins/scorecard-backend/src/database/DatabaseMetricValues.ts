@@ -30,6 +30,9 @@ export class DatabaseMetricValues {
    * Insert multiple metric values
    */
   async createMetricValues(metricValues: DbMetricValueCreate[]): Promise<void> {
+    if (metricValues.length === 0) {
+      return;
+    }
     await this.dbClient(this.tableName).insert(metricValues);
   }
 
@@ -64,64 +67,63 @@ export class DatabaseMetricValues {
   /**
    * Get aggregated metrics by status for multiple entities and metrics.
    */
-  async readAggregatedMetricsByEntityRefs(
+  async readAggregatedMetricByEntityRefs(
     catalog_entity_refs: string[],
-    metric_ids: string[],
-  ): Promise<DbAggregatedMetric[]> {
+    metric_id: string,
+  ): Promise<DbAggregatedMetric | undefined> {
     const latestIdsSubquery = this.dbClient(this.tableName)
       .max('id')
-      .whereIn('metric_id', metric_ids)
+      .where('metric_id', metric_id)
       .whereIn('catalog_entity_ref', catalog_entity_refs)
-      .groupBy('metric_id', 'catalog_entity_ref');
+      .groupBy('catalog_entity_ref');
 
-    const results = await this.dbClient(this.tableName)
-      .select('metric_id')
-      .count('* as total')
+    const statusRows = await this.dbClient(this.tableName)
+      .select('status')
+      .count('* as count')
       .max('timestamp as max_timestamp')
-      .select(
-        this.dbClient.raw(
-          "SUM(CASE WHEN status = 'success' AND value IS NOT NULL THEN 1 ELSE 0 END) as success",
-        ),
-      )
-      .select(
-        this.dbClient.raw(
-          "SUM(CASE WHEN status = 'warning' AND value IS NOT NULL THEN 1 ELSE 0 END) as warning",
-        ),
-      )
-      .select(
-        this.dbClient.raw(
-          "SUM(CASE WHEN status = 'error' AND value IS NOT NULL THEN 1 ELSE 0 END) as error",
-        ),
-      )
       .whereIn('id', latestIdsSubquery)
       .whereNotNull('status')
       .whereNotNull('value')
-      .groupBy('metric_id');
+      .groupBy('status');
+
+    if (!statusRows || statusRows.length === 0) {
+      return undefined;
+    }
 
     // Normalize types for cross-database compatibility
     // PostgreSQL returns COUNT/SUM as strings, SQLite returns numbers
     // PostgreSQL returns MAX(timestamp) as Date, SQLite returns number (milliseconds)
-    return results.map(row => {
-      let maxTimestamp: Date;
-      if (row.max_timestamp instanceof Date) {
-        maxTimestamp = row.max_timestamp;
+    const normalizeTimestamp = (timestamp: any): Date => {
+      if (timestamp instanceof Date) {
+        return timestamp;
       } else if (
-        typeof row.max_timestamp === 'number' ||
-        typeof row.max_timestamp === 'string'
+        typeof timestamp === 'number' ||
+        typeof timestamp === 'string'
       ) {
-        maxTimestamp = new Date(row.max_timestamp as string | number);
-      } else {
-        maxTimestamp = new Date();
+        return new Date(timestamp);
       }
+      return new Date();
+    };
 
-      return {
-        metric_id: row.metric_id,
-        total: Number(row.total),
-        max_timestamp: maxTimestamp,
-        success: Number(row.success),
-        warning: Number(row.warning),
-        error: Number(row.error),
-      };
-    });
+    let maxTimestamp = new Date(0);
+    let total = 0;
+    const statusCounts: Record<string, number> = {};
+    for (const row of statusRows) {
+      const rowTimestamp = normalizeTimestamp(row.max_timestamp);
+      if (rowTimestamp > maxTimestamp) {
+        maxTimestamp = rowTimestamp;
+      }
+      const name = row.status as string;
+      const count = Number(row.count);
+      statusCounts[name] = count;
+      total += count;
+    }
+
+    return {
+      metric_id,
+      total,
+      max_timestamp: maxTimestamp,
+      statusCounts,
+    };
   }
 }

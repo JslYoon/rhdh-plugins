@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { ThresholdResult } from './threshold';
+import { ThresholdConfig, ThresholdResult } from './threshold';
 
 /**
  * @public
@@ -35,7 +35,7 @@ export type MetricValue<T extends MetricType = MetricType> = T extends 'number'
  */
 export type AggregatedMetricValue = {
   count: number;
-  name: 'success' | 'warning' | 'error';
+  name: string;
 };
 
 /**
@@ -72,6 +72,16 @@ export type MetricResult = {
 /**
  * @public
  */
+export type AggregatedMetric = {
+  /** Counts by status name */
+  values: Record<string, number>;
+  total: number;
+  timestamp: string;
+};
+
+/**
+ * @public
+ */
 export type AggregatedMetricResult = {
   id: string;
   status: 'success' | 'error';
@@ -81,9 +91,8 @@ export type AggregatedMetricResult = {
     type: MetricType;
     history?: boolean;
   };
-  result: {
+  result: Omit<AggregatedMetric, 'values'> & {
     values: AggregatedMetricValue[];
-    total: number;
-    timestamp: string;
+    thresholds: ThresholdConfig;
   };
 };

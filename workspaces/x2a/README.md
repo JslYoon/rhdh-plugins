@@ -2,11 +2,27 @@
 
 This is a Backstage plugin workspace providing web UI for the [X2Ansible](https://github.com/x2ansible/x2a-convertor) project.
 
+## Plugins in this Workspace
+
+### X2A Backend Plugin
+
+The [X2A Backend Plugin](./plugins/x2a-backend) provides REST API endpoints and Kubernetes job orchestration for migrating applications to Ansible playbooks using LLM-powered conversion. It manages the lifecycle of migration jobs, credential storage (LLM and AAP), and integration with Ansible Automation Platform.
+
+Key features:
+
+- RESTful API for project and job management
+- Kubernetes job orchestration with automatic cleanup
+- Secure credential management via Kubernetes secrets
+- Support for multiple LLM providers (AWS Bedrock, OpenAI)
+- Integration with Ansible Automation Platform
+
+See the [backend plugin README](./plugins/x2a-backend/README.md) for detailed configuration and usage documentation.
+
 ## Development Environment Setup
 
 ### Prerequisites
 
-- Node.js >20
+- Node.js >22
 - Yarn package manager
 - Kubernetes cluster access (optional, for Kubernetes features)
 
@@ -18,13 +34,41 @@ This is a Backstage plugin workspace providing web UI for the [X2Ansible](https:
    yarn install
    ```
 
-2. Start the development environment:
+2. **Optional:** Update `app-config.yaml` based on your environment.
+   - **`auth:`**
+     - Configure authentication providers for sign-in and SCM access (GitHub, GitLab). See [Backstage auth docs](https://backstage.io/docs/auth/).
+     - Based on your options of auth-providers, mind updating the `conversion-project-template.yaml` for source and target repository URLs.
+   - **`x2a:`** - Provide LLM credentials, Ansible Automation Platform connection details, and Kubernetes resource limits. See [x2a-convertor technical details](https://github.com/x2ansible/x2a-convertor?tab=readme-ov-file#technical-details).
+
+3. Start the development environment with just the plugin loaded:
+
+   **GitHub OAuth**: [Create a GitHub OAuth application](https://github.com/settings/developers).
+
+   **GitLab OAuth:** When [creating a GitLab OAuth application](https://gitlab.com/-/user_settings/applications), request scopes per [official documentation](https://backstage.io/docs/auth/gitlab/provider/).
 
    ```sh
+   export AUTH_GITHUB_CLIENT_ID=.... # Optional if "guest" user is not enough
+   export AUTH_GITHUB_CLIENT_SECRET=... # Optional if "guest" user is not enough
+
+   # For GitLab auth (create app at https://gitlab.com/-/user_settings/applications):
+   export AUTH_GITLAB_CLIENT_ID=...
+   export AUTH_GITLAB_CLIENT_SECRET=...
+
    yarn dev
    ```
 
    This command runs both the frontend and backend plugins in parallel. The frontend will be available at `http://localhost:3000` and the backend at `http://localhost:7007`.
+
+   Eventually run the full Backstage application for more advanced testing or development, i.e. scaffolder or RBAC:
+
+   ```sh
+   export AUTH_GITHUB_CLIENT_ID=.... # Optional if "guest" user is not enough
+   export AUTH_GITHUB_CLIENT_SECRET=... # Optional if "guest" user is not enough
+   export AUTH_GITLAB_CLIENT_ID=...
+   export AUTH_GITLAB_CLIENT_SECRET=...
+
+   yarn start
+   ```
 
 ## Adding New API Endpoints
 
@@ -164,7 +208,7 @@ The plugin uses the Kubernetes client library to interact with Kubernetes cluste
 
 By default, it loads configuration from your local `~/.kube/config` file.
 
-Additional methods are planed to be implemented later.
+Additional methods are planned to be implemented later.
 
 ### Local Development Setup
 
@@ -196,7 +240,7 @@ Loaded Kubernetes configuration from ~/.kube/config
 
 - `yarn test` - Run tests
 - `yarn lint` - Run linter
-- `prettier:fix` - Fix by prettier
+- `yarn prettier:fix` - Fix code formatting
 - `yarn build:all` - Build all packages
 - `yarn clean` - Clean build artifacts
 
