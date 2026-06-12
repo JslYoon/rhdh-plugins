@@ -33,9 +33,11 @@ import {
 
 import { Readable } from 'node:stream';
 
+import { ModelCapabilitiesCache } from './attachment-validation';
 import {
   DEFAULT_LIGHTSPEED_SERVICE_HOST,
   DEFAULT_LIGHTSPEED_SERVICE_PORT,
+  TEST_VISION_JPEG,
 } from './constant';
 import { McpUserSettingsStore } from './mcp-server-store';
 import {
@@ -698,6 +700,61 @@ export async function createRouter(
         const errormsg = `Error while updating topic summary: ${error}`;
         logger.error(errormsg);
         response.status(500).json({ error: errormsg });
+      }
+    },
+  );
+
+  router.post(
+    '/v1/validate-model-vision',
+    requirePermission(lightspeedChatReadPermission),
+    async (request, response) => {
+      try {
+        const { model, provider } = request.body;
+
+        logger.info(`Vision validation requested for model: ${model}`);
+
+        // Check cache
+        if (ModelCapabilitiesCache.has(model)) {
+          const supportsVision = ModelCapabilitiesCache.get(model)!;
+          logger.info(`Cache hit for ${model}: ${supportsVision}`);
+          response.json({
+            model,
+            supportsVision,
+          });
+          return;
+        }
+
+        // Test model with minimal JPEG
+        const testJpeg = `data:image/jpeg;base64,${TEST_VISION_JPEG}`;
+        const testResponse = await fetch(
+          `${lightspeedCoreBaseUrl}/v1/streaming_query`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model,
+              provider,
+              query: 'Reply with only: yes',
+              attachments: [
+                { type: 'image', mime_type: 'image/jpeg', data: testJpeg },
+              ],
+              max_tokens: 1,
+            }),
+          },
+        );
+
+        const supportsVision = testResponse.ok;
+        ModelCapabilitiesCache.set(model, supportsVision);
+
+        logger.info(
+          `Vision test for ${model}: ${supportsVision ? 'PASS' : 'FAIL'}`,
+        );
+
+        response.json({ model, supportsVision });
+      } catch (error) {
+        logger.error(`Vision test error for ${model}:`, error);
+        ModelCapabilitiesCache.set(model, false);
+        response.json({ model, supportsVision: false });
       }
     },
   );
