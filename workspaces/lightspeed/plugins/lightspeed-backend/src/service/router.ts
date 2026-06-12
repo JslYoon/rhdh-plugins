@@ -56,7 +56,10 @@ import { userPermissionAuthorization } from './permission';
 import { createTokenEncryptor } from './token-encryption';
 import { QueryRequestBody, RouterOptions } from './types';
 import { handleLCSFetchError, rewriteLightspeedProxyPath } from './utils';
-import { validateCompletionsRequest } from './validation';
+import {
+  validateAttachmentsForModel,
+  validateCompletionsRequest,
+} from './validation';
 
 interface StaticMcpServer {
   name: string;
@@ -591,6 +594,7 @@ export async function createRouter(
   router.post(
     '/v1/query',
     validateCompletionsRequest,
+    validateAttachmentsForModel,
     requirePermission(lightspeedChatCreatePermission),
     async (request, response) => {
       const { provider }: Pick<QueryRequestBody, 'provider'> = request.body;
