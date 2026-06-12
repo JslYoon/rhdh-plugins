@@ -47,4 +47,12 @@ export const ModelCapabilitiesCache = {
   has(model: string): boolean {
     return model in this.cache;
   },
+
+  /**
+   * Clear all cached model capabilities.
+   * Primarily used for testing.
+   */
+  clear(): void {
+    this.cache = {};
+  },
 };

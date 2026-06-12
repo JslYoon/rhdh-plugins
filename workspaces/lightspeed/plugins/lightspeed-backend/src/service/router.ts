@@ -712,9 +712,8 @@ export async function createRouter(
     '/v1/validate-model-vision',
     requirePermission(lightspeedChatReadPermission),
     async (request, response) => {
+      const { model, provider } = request.body;
       try {
-        const { model, provider } = request.body;
-
         logger.info(`Vision validation requested for model: ${model}`);
 
         // Check cache
