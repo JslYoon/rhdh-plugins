@@ -45,7 +45,11 @@ import {
   getIdentity,
 } from '../middleware/getIdentity';
 import { userPermissionAuthorization } from '../permission';
-import { isValidFileType, parseFileContent } from './documents/documentHelpers';
+import {
+  cleanupDoclingOutput,
+  convertWithDocling,
+} from './documents/doclingClient';
+import { isValidFileType } from './documents/documentHelpers';
 import { DocumentService } from './documents/documentService';
 import { SessionService } from './sessions/sessionService';
 import {
@@ -398,11 +402,22 @@ export async function createNotebooksRouter(
         handleError(logger, res, 'Session not found');
         return;
       }
-      const parsedDocument = await parseFileContent(logger, fileType, req.file);
-      const fileId = await documentService.uploadFile(
-        parsedDocument.content,
-        title,
+
+      if (!req.file) {
+        handleError(logger, res, 'No file uploaded');
+        return;
+      }
+
+      const mdPath = await convertWithDocling(
+        req.file.buffer,
+        req.file.originalname,
       );
+      let fileId: string;
+      try {
+        fileId = await documentService.uploadFile(mdPath, title);
+      } finally {
+        await cleanupDoclingOutput(mdPath);
+      }
 
       res.status(HTTP_STATUS_ACCEPTED).json({
         status: 'processing',
@@ -411,7 +426,7 @@ export async function createNotebooksRouter(
         message: 'Document upload started',
       });
 
-      // Upload document to vector store in background
+      // Attach file to vector store in background
       const docName = newTitle || title;
       documentService
         .upsertDocument(sessionId, title, fileType, fileId, newTitle)
