@@ -18,6 +18,8 @@ import { LoggerService } from '@backstage/backend-plugin-api';
 import { Config } from '@backstage/config';
 import { ConflictError, NotFoundError } from '@backstage/errors';
 
+import { promises as fs } from 'fs';
+
 import {
   DEFAULT_CHUNK_OVERLAP_TOKENS,
   DEFAULT_CHUNKING_STRATEGY_TYPE,
