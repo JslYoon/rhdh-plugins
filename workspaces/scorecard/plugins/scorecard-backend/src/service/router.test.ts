@@ -341,7 +341,7 @@ describe('createRouter', () => {
           'DORA - Change Failure Rate',
           'Change failure rate description.',
           4,
-          ['github:deployments', 'jira:incidents'],
+          ['github:doraDeployments', 'jira:doraIncidents'],
         ),
       );
       metricProvidersRegistry.register(
@@ -350,16 +350,16 @@ describe('createRouter', () => {
 
       (collectorsService.getCollectorMetadata as jest.Mock).mockImplementation(
         (collectorId: string) => {
-          if (collectorId === 'github:deployments') {
+          if (collectorId === 'github:doraDeployments') {
             return {
-              id: 'github:deployments',
+              id: 'github:doraDeployments',
               description:
                 'Collects data from GitHub Deployments for production deployment events.',
             };
           }
-          if (collectorId === 'jira:incidents') {
+          if (collectorId === 'jira:doraIncidents') {
             return {
-              id: 'jira:incidents',
+              id: 'jira:doraIncidents',
               description: 'Collects Jira incidents.',
             };
           }
@@ -379,21 +379,21 @@ describe('createRouter', () => {
       expect(response.body).toEqual({
         collectors: [
           {
-            id: 'github:deployments',
+            id: 'github:doraDeployments',
             description:
               'Collects data from GitHub Deployments for production deployment events.',
           },
           {
-            id: 'jira:incidents',
+            id: 'jira:doraIncidents',
             description: 'Collects Jira incidents.',
           },
         ],
       });
       expect(collectorsService.getCollectorMetadata).toHaveBeenCalledWith(
-        'github:deployments',
+        'github:doraDeployments',
       );
       expect(collectorsService.getCollectorMetadata).toHaveBeenCalledWith(
-        'jira:incidents',
+        'jira:doraIncidents',
       );
     });
 
@@ -432,9 +432,9 @@ describe('createRouter', () => {
     it('returns 500 when a collector ID on the metric is not registered', async () => {
       (collectorsService.getCollectorMetadata as jest.Mock).mockImplementation(
         (collectorId: string) => {
-          if (collectorId === 'github:deployments') {
+          if (collectorId === 'github:doraDeployments') {
             return {
-              id: 'github:deployments',
+              id: 'github:doraDeployments',
               description: 'Collects GitHub deployments.',
             };
           }
@@ -451,7 +451,7 @@ describe('createRouter', () => {
       expect(response.status).toBe(500);
       expect(response.body.error.name).not.toBe('NotFoundError');
       expect(response.body.error.message).toContain(
-        "Metric 'dora.changeFailureRate' is configured to use collector 'jira:incidents', but that collector is not registered.",
+        "Metric 'dora.changeFailureRate' is configured to use collector 'jira:doraIncidents', but that collector is not registered.",
       );
     });
   });
@@ -654,9 +654,24 @@ describe('createRouter', () => {
         defaultVisualization: 'donut',
       },
       points: [
-        { value: 8, timestamp: '2024-01-01T20:00:00.000Z' },
-        { value: 7, timestamp: '2024-01-02T12:00:00.000Z' },
+        {
+          value: 8,
+          timestamp: '2024-01-01T20:00:00.000Z',
+          thresholdEvaluation: 'success',
+        },
+        {
+          value: 7,
+          timestamp: '2024-01-02T12:00:00.000Z',
+          thresholdEvaluation: 'success',
+        },
       ],
+      thresholds: {
+        rules: [
+          { key: 'error', expression: '>40' },
+          { key: 'warning', expression: '>20' },
+          { key: 'success', expression: '<=20' },
+        ],
+      },
     };
 
     const timeSeriesPath =
