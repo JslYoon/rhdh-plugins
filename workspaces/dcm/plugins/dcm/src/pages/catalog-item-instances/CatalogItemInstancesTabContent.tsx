@@ -16,7 +16,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { TableColumn } from '@backstage/core-components';
-import { useApi } from '@backstage/core-plugin-api';
+
 import {
   Box,
   Button,
@@ -35,7 +35,7 @@ import AutorenewIcon from '@material-ui/icons/Autorenew';
 import DeleteIcon from '@material-ui/icons/Delete';
 import type { CatalogItemInstance } from '@red-hat-developer-hub/backstage-plugin-dcm-common';
 import { extractApiError } from '@red-hat-developer-hub/backstage-plugin-dcm-common';
-import { catalogApiRef } from '../../apis';
+import { useDcmClients } from '../../api/DcmClientsContext';
 import { DcmCrudTabLayout } from '../../components/DcmCrudTabLayout';
 import { DcmDeleteDialog } from '../../components/DcmDeleteDialog';
 import { DcmSuccessSnackbar } from '../../components/DcmSuccessSnackbar';
@@ -72,7 +72,7 @@ const useStyles = makeStyles(() => ({
 
 export function CatalogItemInstancesTabContent() {
   const classes = useStyles();
-  const catalogApi = useApi(catalogApiRef);
+  const { catalogApi } = useDcmClients();
   const { t } = useTranslation();
 
   // Paginated catalog-item list for the create-instance dropdown.
@@ -113,7 +113,7 @@ export function CatalogItemInstancesTabContent() {
       inst.display_name,
       inst.spec?.catalog_item_id,
       inst.uid,
-      ...(inst.spec?.resource_ids ?? []),
+      ...(inst.resource_ids ?? []),
     ],
     emptyForm: emptyInstanceForm,
     isValid: isInstanceFormValid,
@@ -182,10 +182,10 @@ export function CatalogItemInstancesTabContent() {
       },
       {
         title: t('instances.columns.resourceIds'),
-        field: 'spec.resource_ids',
+        field: 'resource_ids',
         sorting: false,
         render: inst => {
-          const ids = inst.spec?.resource_ids ?? [];
+          const ids = inst.resource_ids ?? [];
           if (ids.length === 0) return <DcmEmptyCell />;
           return (
             <TruncatedText

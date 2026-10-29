@@ -1,5 +1,39 @@
 # @red-hat-developer-hub/backstage-plugin-bulk-import
 
+## 9.2.0
+
+### Minor Changes
+
+- 0a42ebd: Bump minor after the release-2.1 cut so main patch versions do not collide with the maintenance line on npm.
+
+### Patch Changes
+
+- Updated dependencies [0a42ebd]
+  - @red-hat-developer-hub/backstage-plugin-bulk-import-common@9.2.0
+
+## 9.1.2
+
+### Patch Changes
+
+- 6c7eb91: Updated dependency `@playwright/test` to `1.64.0`.
+- a669321: Updated dependency `@testing-library/user-event` to `14.6.7`.
+- fb4ecee: Updated dependency `prettier` to `3.9.9`.
+- Updated dependencies [fb4ecee]
+  - @red-hat-developer-hub/backstage-plugin-bulk-import-common@9.1.2
+
+## 9.1.1
+
+### Patch Changes
+
+- 2bebbeb: Updated dependency `prettier` to `3.9.8`.
+- fe07a78: Updated dependency `@openapitools/openapi-generator-cli` to `2.41.0`.
+  Updated dependency `@playwright/test` to `1.63.0`.
+- 22ab37c: Updated dependency `prettier` to `3.9.7`.
+- f5f0d02: Updated translations for RHDH 2.1 (s3297).
+- Updated dependencies [2bebbeb]
+- Updated dependencies [22ab37c]
+  - @red-hat-developer-hub/backstage-plugin-bulk-import-common@9.1.1
+
 ## 9.1.0
 
 ### Minor Changes

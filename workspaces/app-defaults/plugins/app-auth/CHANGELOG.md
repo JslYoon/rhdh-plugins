@@ -1,5 +1,17 @@
 # @red-hat-developer-hub/backstage-plugin-app-auth
 
+## 1.3.0
+
+### Minor Changes
+
+- 0a42ebd: Bump minor after the release-2.1 cut so main patch versions do not collide with the maintenance line on npm.
+
+## 1.2.0
+
+### Minor Changes
+
+- d608526: Replaces the broken Guest/GitHub fallback with a descriptive ErrorPanel when auth.providers is empty or misconfigured. Removed DEFAULT_PROVIDER = 'github', auth providers need to explicitly installed dynamically. Also removed behavior when default Guest login when `auth.environment` is development.
+
 ## 1.1.1
 
 ### Patch Changes

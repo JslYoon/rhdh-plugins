@@ -16,13 +16,14 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { TableColumn } from '@backstage/core-components';
-import { useApi } from '@backstage/core-plugin-api';
+
 import {
   Box,
   Chip,
   FormControl,
   InputLabel,
   MenuItem,
+  OutlinedInput,
   Select,
   Tooltip,
   Typography,
@@ -33,7 +34,7 @@ import type {
   Agent,
   AgentHealthStatus,
 } from '@red-hat-developer-hub/backstage-plugin-dcm-common';
-import { agentsApiRef, catalogApiRef } from '../../apis';
+import { useDcmClients } from '../../api/DcmClientsContext';
 import { DcmCrudTabLayout } from '../../components/DcmCrudTabLayout';
 import { DcmFormDialog } from '../../components/DcmFormDialog';
 import { DcmSuccessSnackbar } from '../../components/DcmSuccessSnackbar';
@@ -69,8 +70,7 @@ const useStyles = makeStyles(theme => ({
 
 export function AgentsTabContent() {
   const classes = useStyles();
-  const agentsApi = useApi(agentsApiRef);
-  const catalogApi = useApi(catalogApiRef);
+  const { agentsApi, catalogApi } = useDcmClients();
   const { t } = useTranslation();
 
   const [healthFilter, setHealthFilter] = useState<AgentHealthStatus | ''>('');
@@ -252,6 +252,7 @@ export function AgentsTabContent() {
     [classes, t],
   );
 
+  const healthFilterLabel = t('agents.filter.healthLabel');
   const healthFilterControl = (
     <FormControl
       variant="outlined"
@@ -259,7 +260,7 @@ export function AgentsTabContent() {
       className={classes.healthFilter}
     >
       <InputLabel shrink id="health-filter-label">
-        {t('agents.filter.healthLabel')}
+        {healthFilterLabel}
       </InputLabel>
       <Select
         labelId="health-filter-label"
@@ -268,8 +269,24 @@ export function AgentsTabContent() {
           setHealthFilter(e.target.value as AgentHealthStatus | '')
         }
         displayEmpty
-        label={t('agents.filter.healthLabel')}
-        inputProps={{ 'data-testid': 'health-filter' }}
+        label={healthFilterLabel}
+        input={
+          <OutlinedInput
+            notched
+            label={healthFilterLabel}
+            inputProps={{ 'data-testid': 'health-filter' }}
+          />
+        }
+        renderValue={(value: unknown) => {
+          const selected = value as AgentHealthStatus | '';
+          if (!selected) {
+            return t('agents.filter.healthAll');
+          }
+          return (
+            healthFilterOptions.find(opt => opt.value === selected)?.label ??
+            selected
+          );
+        }}
       >
         <MenuItem value="">{t('agents.filter.healthAll')}</MenuItem>
         {healthFilterOptions.map(opt => (

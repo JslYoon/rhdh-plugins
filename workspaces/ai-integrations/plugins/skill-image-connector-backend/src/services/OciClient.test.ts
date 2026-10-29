@@ -1,0 +1,1318 @@
+/*
+ * Copyright Red Hat, Inc.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+import type { LoggerService } from '@backstage/backend-plugin-api';
+import { createHash } from 'node:crypto';
+import {
+  ManifestResponseError,
+  parseImageRef,
+  fetchManifest,
+  fetchBlob,
+} from './OciClient';
+import type { OciManifest } from './types';
+import { DEFAULT_SKILL_IMAGE_OPTIONS } from './types';
+import { makeManifest, computeManifestDigest } from '../testUtils';
+import { isPrivateAddress } from './HttpClient';
+
+// Mock DNS resolution so redirect tests don't fail with real DNS lookups.
+// By default, resolve all hostnames to a public IP.
+jest.mock('node:dns', () => ({
+  promises: {
+    lookup: jest
+      .fn()
+      .mockResolvedValue([{ address: '93.184.216.34', family: 4 }]),
+  },
+}));
+
+const validSha256Digest = `sha256:${'a'.repeat(64)}`;
+
+describe('parseImageRef', () => {
+  it('should parse a full image reference with tag', () => {
+    const ref = parseImageRef(
+      'quay.io/gabemontero/hello-world-skill:1.0.0-draft',
+    );
+    expect(ref).toEqual({
+      registry: 'quay.io',
+      repository: 'gabemontero/hello-world-skill',
+      tag: '1.0.0-draft',
+    });
+  });
+
+  it('should default tag to latest when omitted', () => {
+    const ref = parseImageRef('quay.io/gabemontero/hello-world-skill');
+    expect(ref).toEqual({
+      registry: 'quay.io',
+      repository: 'gabemontero/hello-world-skill',
+      tag: 'latest',
+    });
+  });
+
+  it('should strip oci:// prefix', () => {
+    const ref = parseImageRef('oci://quay.io/gabemontero/hello-world-skill:v1');
+    expect(ref).toEqual({
+      registry: 'quay.io',
+      repository: 'gabemontero/hello-world-skill',
+      tag: 'v1',
+    });
+  });
+
+  it('should handle nested repository paths', () => {
+    const ref = parseImageRef('quay.io/org/sub/repo:2.0.0');
+    expect(ref).toEqual({
+      registry: 'quay.io',
+      repository: 'org/sub/repo',
+      tag: '2.0.0',
+    });
+  });
+
+  it('should throw for invalid reference without slash', () => {
+    expect(() => parseImageRef('invalid-ref')).toThrow(
+      'Invalid image reference',
+    );
+  });
+
+  it('should handle registry with port', () => {
+    const ref = parseImageRef('localhost:5000/myrepo:latest');
+    expect(ref).toEqual({
+      registry: 'localhost:5000',
+      repository: 'myrepo',
+      tag: 'latest',
+    });
+  });
+
+  it('should parse digest references', () => {
+    const ref = parseImageRef(
+      'quay.io/org/repo@sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+    );
+    expect(ref).toEqual({
+      registry: 'quay.io',
+      repository: 'org/repo',
+      tag: 'latest',
+      digest:
+        'sha256:abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+    });
+  });
+
+  it('should parse tag and digest references without leaking the tag', () => {
+    const ref = parseImageRef(`quay.io/org/repo:v1@sha256:${'a'.repeat(64)}`);
+    expect(ref).toEqual({
+      registry: 'quay.io',
+      repository: 'org/repo',
+      tag: 'v1',
+      digest: validSha256Digest,
+    });
+  });
+
+  it('should reject an empty tag', () => {
+    expect(() => parseImageRef('quay.io/org/repo:')).toThrow(
+      'tag must not be empty',
+    );
+  });
+
+  it('should throw for empty string', () => {
+    expect(() => parseImageRef('')).toThrow('reference must not be empty');
+  });
+
+  it('should throw for whitespace-only string', () => {
+    expect(() => parseImageRef('   ')).toThrow('reference must not be empty');
+  });
+
+  it('should throw for digest with invalid algorithm', () => {
+    expect(() => parseImageRef('quay.io/org/repo@md5:abc')).toThrow(
+      'digest must be a valid sha256 or sha512 digest',
+    );
+  });
+});
+
+describe('fetchManifest', () => {
+  const logger = {
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+  } as unknown as LoggerService;
+
+  beforeEach(() => {
+    // Re-establish the DNS mock after resetAllMocks clears it.
+    const dns = require('node:dns');
+    (dns.promises.lookup as jest.Mock).mockResolvedValue([
+      { address: '93.184.216.34', family: 4 },
+    ]);
+  });
+
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  it('should fetch and return manifest with computed digest', async () => {
+    const mockManifest: OciManifest = {
+      schemaVersion: 2,
+      config: {
+        mediaType: 'application/vnd.oci.image.config.v1+json',
+        digest: 'sha256:config',
+        size: 100,
+      },
+      layers: [
+        {
+          mediaType: 'application/vnd.oci.image.layer.v1.tar',
+          digest: 'sha256:abc',
+          size: 200,
+          annotations: {
+            'org.opencontainers.image.title': 'skillimage.yaml',
+          },
+        },
+      ],
+    };
+    const manifestBuffer = Buffer.from(JSON.stringify(mockManifest));
+    const expectedDigest = `sha256:${createHash('sha256')
+      .update(manifestBuffer)
+      .digest('hex')}`;
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockManifest,
+      arrayBuffer: async () => manifestBuffer,
+      headers: new Map(),
+    });
+
+    const result = await fetchManifest(
+      { registry: 'quay.io', repository: 'org/repo', tag: 'v1' },
+      logger,
+    );
+    expect(result.manifest).toEqual(mockManifest);
+    expect(result.digest).toBe(expectedDigest);
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://quay.io/v2/org/repo/manifests/v1',
+      expect.objectContaining({
+        headers: expect.objectContaining({ accept: expect.any(String) }),
+      }),
+    );
+  });
+
+  it('should throw on non-ok response', async () => {
+    const cancel = jest.fn().mockResolvedValue(undefined);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 404,
+      statusText: 'Not Found',
+      headers: new Map(),
+      body: { cancel },
+    });
+
+    await expect(
+      fetchManifest(
+        { registry: 'quay.io', repository: 'org/repo', tag: 'v1' },
+        logger,
+      ),
+    ).rejects.toBeInstanceOf(ManifestResponseError);
+    expect(cancel).toHaveBeenCalled();
+  });
+
+  it('should throw on manifest list response', async () => {
+    const mockManifestList = {
+      schemaVersion: 2,
+      mediaType: 'application/vnd.oci.image.index.v1+json',
+      manifests: [
+        {
+          mediaType: 'application/vnd.oci.image.manifest.v1+json',
+          digest: 'sha256:abc',
+          size: 100,
+        },
+      ],
+    };
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockManifestList,
+      arrayBuffer: async () => Buffer.from(JSON.stringify(mockManifestList)),
+      headers: new Map(),
+    });
+
+    await expect(
+      fetchManifest(
+        { registry: 'quay.io', repository: 'org/repo', tag: 'v1' },
+        logger,
+      ),
+    ).rejects.toThrow('manifest list');
+  });
+
+  it('should reject an oversized manifest response before parsing', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => Buffer.alloc(5 * 1024 * 1024 + 1),
+      headers: new Map(),
+    });
+
+    await expect(
+      fetchManifest(
+        { registry: 'quay.io', repository: 'org/repo', tag: 'v1' },
+        logger,
+      ),
+    ).rejects.toThrow('exceeds maximum allowed size');
+  });
+
+  it('should use digest instead of tag when available', async () => {
+    const mockManifest: OciManifest = {
+      schemaVersion: 2,
+      config: {
+        mediaType: 'application/vnd.oci.image.config.v1+json',
+        digest: 'sha256:config',
+        size: 100,
+      },
+      layers: [],
+    };
+    const manifestBuffer = Buffer.from(JSON.stringify(mockManifest));
+    const manifestDigest = `sha256:${createHash('sha256')
+      .update(manifestBuffer)
+      .digest('hex')}`;
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => mockManifest,
+      arrayBuffer: async () => manifestBuffer,
+      headers: new Map(),
+    });
+
+    const result = await fetchManifest(
+      {
+        registry: 'quay.io',
+        repository: 'org/repo',
+        tag: 'latest',
+        digest: manifestDigest,
+      },
+      logger,
+    );
+    expect(global.fetch).toHaveBeenCalledWith(
+      `https://quay.io/v2/org/repo/manifests/${manifestDigest}`,
+      expect.any(Object),
+    );
+    expect(result.digest).toBe(manifestDigest);
+  });
+
+  it('should reject a digest reference when the manifest bytes do not match', async () => {
+    const manifest: OciManifest = {
+      schemaVersion: 2,
+      config: {
+        mediaType: 'application/vnd.oci.image.config.v1+json',
+        digest: 'sha256:config',
+        size: 100,
+      },
+      layers: [],
+    };
+    const manifestBuffer = Buffer.from(JSON.stringify(manifest));
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => manifestBuffer,
+      headers: new Map(),
+    });
+
+    await expect(
+      fetchManifest(
+        {
+          registry: 'quay.io',
+          repository: 'org/repo',
+          tag: 'latest',
+          digest: validSha256Digest,
+        },
+        logger,
+      ),
+    ).rejects.toThrow('Manifest digest mismatch');
+  });
+
+  it('should handle 401 with bearer token exchange', async () => {
+    const mockManifest: OciManifest = {
+      schemaVersion: 2,
+      config: {
+        mediaType: 'application/vnd.oci.image.config.v1+json',
+        digest: 'sha256:config',
+        size: 100,
+      },
+      layers: [],
+    };
+
+    const headersMap = new Map([
+      [
+        'www-authenticate',
+        'Bearer realm="https://auth.example.com/token",service="registry.example.com",scope="repository:org/repo:pull"',
+      ],
+    ]);
+    const cancelUnauthorizedBody = jest.fn().mockResolvedValue(undefined);
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        headers: { get: (k: string) => headersMap.get(k) ?? null },
+        body: { cancel: cancelUnauthorizedBody },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ token: 'test-token-123' }),
+        arrayBuffer: async () =>
+          Buffer.from(JSON.stringify({ token: 'test-token-123' })),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => mockManifest,
+        arrayBuffer: async () => Buffer.from(JSON.stringify(mockManifest)),
+        headers: new Map(),
+      });
+
+    const result = await fetchManifest(
+      { registry: 'registry.example.com', repository: 'org/repo', tag: 'v1' },
+      logger,
+      { tokenRealm: 'https://auth.example.com/token' },
+    );
+    expect(result.manifest).toEqual(mockManifest);
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+    expect(cancelUnauthorizedBody).toHaveBeenCalled();
+  });
+
+  it('preserves a token endpoint 404 for source-specific logging instead of warning and masking it as 401', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 401,
+          headers: {
+            'www-authenticate': 'Bearer realm="https://quay.io/token"',
+          },
+        }),
+      )
+      .mockResolvedValueOnce(new Response('not found', { status: 404 }));
+    await expect(
+      fetchManifest(
+        { registry: 'quay.io', repository: 'org/missing', tag: 'v1' },
+        logger,
+      ),
+    ).rejects.toMatchObject({ status: 404 });
+    expect(logger.warn).not.toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('should fall back when the bearer token response is invalid JSON', async () => {
+    const headersMap = new Map([
+      ['www-authenticate', 'Bearer realm="https://auth.example.com/token"'],
+    ]);
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        headers: { get: (key: string) => headersMap.get(key) ?? null },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        arrayBuffer: async () => Buffer.from('not-json'),
+        headers: new Map(),
+      });
+
+    await expect(
+      fetchManifest(
+        { registry: 'registry.example.com', repository: 'org/repo', tag: 'v1' },
+        logger,
+        { tokenRealm: 'https://auth.example.com/token' },
+      ),
+    ).rejects.toThrow('Failed to fetch manifest');
+    expect(logger.warn).toHaveBeenCalledWith(
+      'Bearer token response was not valid JSON',
+      expect.any(Error),
+    );
+  });
+
+  it('should use configured credentials for registry and token requests', async () => {
+    const mockManifest: OciManifest = {
+      schemaVersion: 2,
+      config: {
+        mediaType: 'application/vnd.oci.image.config.v1+json',
+        digest: 'sha256:config',
+        size: 100,
+      },
+      layers: [],
+    };
+    const credentials = {
+      username: 'user',
+      password: 'secret',
+      tokenRealm: 'https://auth.example.com/token',
+    };
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        statusText: 'Unauthorized',
+        headers: {
+          get: () =>
+            'Bearer realm="https://auth.example.com/token",service="registry.example.com"',
+        },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ access_token: 'test-token-123' }),
+        arrayBuffer: async () =>
+          Buffer.from(JSON.stringify({ access_token: 'test-token-123' })),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => mockManifest,
+        arrayBuffer: async () => Buffer.from(JSON.stringify(mockManifest)),
+        headers: new Map(),
+      });
+
+    await fetchManifest(
+      { registry: 'registry.example.com', repository: 'org/repo', tag: 'v1' },
+      logger,
+      credentials,
+    );
+
+    const calls = (global.fetch as jest.Mock).mock.calls;
+    expect(new Headers(calls[0][1].headers).get('authorization')).toMatch(
+      /^Basic /,
+    );
+    expect(new Headers(calls[1][1].headers).get('authorization')).toMatch(
+      /^Basic /,
+    );
+    expect(new Headers(calls[2][1].headers).get('authorization')).toBe(
+      'Bearer test-token-123',
+    );
+  });
+
+  it('should throw when fetch itself rejects', async () => {
+    global.fetch = jest.fn().mockRejectedValue(new Error('Network error'));
+
+    await expect(
+      fetchManifest(
+        { registry: 'quay.io', repository: 'org/repo', tag: 'v1' },
+        logger,
+      ),
+    ).rejects.toThrow('Network error');
+  });
+
+  it('should require an explicit realm for anonymous cross-host token exchange', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      statusText: 'Unauthorized',
+      headers: {
+        get: () => 'Bearer realm="https://auth.example.com/token"',
+      },
+    });
+
+    await expect(
+      fetchManifest(
+        { registry: 'registry.example.com', repository: 'org/repo', tag: 'v1' },
+        logger,
+      ),
+    ).rejects.toThrow('configure credentials.tokenRealm explicitly');
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+});
+
+function mockFetchOk(manifest: OciManifest): void {
+  const buffer = Buffer.from(JSON.stringify(manifest));
+  global.fetch = jest.fn().mockResolvedValue({
+    ok: true,
+    status: 200,
+    arrayBuffer: async () => buffer,
+    headers: new Map(),
+  });
+}
+
+describe('fetchManifest: digest computation', () => {
+  const pinningLogger = {
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+  } as unknown as LoggerService;
+
+  beforeEach(() => {
+    const dns = require('node:dns');
+    (dns.promises.lookup as jest.Mock).mockResolvedValue([
+      { address: '93.184.216.34', family: 4 },
+    ]);
+  });
+
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  it('computes SHA-256 digest from raw manifest bytes on tag fetch', async () => {
+    const manifest = makeManifest();
+    const expected = computeManifestDigest(manifest);
+    mockFetchOk(manifest);
+
+    const result = await fetchManifest(
+      { registry: 'quay.io', repository: 'org/repo', tag: 'v1' },
+      pinningLogger,
+    );
+
+    expect(result.digest).toBe(expected);
+    expect(result.manifest).toEqual(manifest);
+    // Should have fetched by tag
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://quay.io/v2/org/repo/manifests/v1',
+      expect.any(Object),
+    );
+  });
+
+  it('returns verified digest when fetched by explicit digest', async () => {
+    const manifest = makeManifest();
+    const buffer = Buffer.from(JSON.stringify(manifest));
+    const digest = `sha256:${createHash('sha256')
+      .update(buffer)
+      .digest('hex')}`;
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => buffer,
+      headers: new Map(),
+    });
+
+    const result = await fetchManifest(
+      {
+        registry: 'quay.io',
+        repository: 'org/repo',
+        tag: 'latest',
+        digest,
+      },
+      pinningLogger,
+    );
+
+    expect(result.digest).toBe(digest);
+    // Should have fetched by digest
+    expect(global.fetch).toHaveBeenCalledWith(
+      `https://quay.io/v2/org/repo/manifests/${digest}`,
+      expect.any(Object),
+    );
+  });
+
+  it('rejects manifest whose bytes do not match the requested digest', async () => {
+    const manifest = makeManifest();
+    const buffer = Buffer.from(JSON.stringify(manifest));
+    const wrongDigest = `sha256:${'0'.repeat(64)}`;
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => buffer,
+      headers: new Map(),
+    });
+
+    await expect(
+      fetchManifest(
+        {
+          registry: 'quay.io',
+          repository: 'org/repo',
+          tag: 'latest',
+          digest: wrongDigest,
+        },
+        pinningLogger,
+      ),
+    ).rejects.toThrow('Manifest digest mismatch');
+  });
+
+  it('rejects an invalid digest format', async () => {
+    const manifest = makeManifest();
+    mockFetchOk(manifest);
+
+    await expect(
+      fetchManifest(
+        {
+          registry: 'quay.io',
+          repository: 'org/repo',
+          tag: 'latest',
+          digest: 'md5:invalid',
+        },
+        pinningLogger,
+      ),
+    ).rejects.toThrow('Invalid manifest digest');
+  });
+});
+
+describe('fetchManifest: digest pinning across retries', () => {
+  const pinningLogger = {
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+  } as unknown as LoggerService;
+
+  beforeEach(() => {
+    const dns = require('node:dns');
+    (dns.promises.lookup as jest.Mock).mockResolvedValue([
+      { address: '93.184.216.34', family: 4 },
+    ]);
+  });
+
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  it('fetches a resolved manifest by digest', async () => {
+    // Resolve a tag, then verify its digest-addressed manifest fetch.
+    const manifest = makeManifest();
+    const buffer = Buffer.from(JSON.stringify(manifest));
+    const digest = `sha256:${createHash('sha256')
+      .update(buffer)
+      .digest('hex')}`;
+
+    // First fetch (resolution by tag) succeeds
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => buffer,
+      headers: new Map(),
+    });
+
+    const resolution = await fetchManifest(
+      { registry: 'quay.io', repository: 'org/repo', tag: 'v1' },
+      pinningLogger,
+    );
+    expect(resolution.digest).toBe(digest);
+    expect(global.fetch).toHaveBeenCalledWith(
+      'https://quay.io/v2/org/repo/manifests/v1',
+      expect.any(Object),
+    );
+
+    // Second fetch (pinned by digest) succeeds
+    jest.resetAllMocks();
+    const dns = require('node:dns');
+    (dns.promises.lookup as jest.Mock).mockResolvedValue([
+      { address: '93.184.216.34', family: 4 },
+    ]);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => buffer,
+      headers: new Map(),
+    });
+
+    const pinned = await fetchManifest(
+      {
+        registry: 'quay.io',
+        repository: 'org/repo',
+        tag: 'v1',
+        digest,
+      },
+      pinningLogger,
+    );
+
+    // Should fetch by digest, not by tag
+    expect(global.fetch).toHaveBeenCalledWith(
+      `https://quay.io/v2/org/repo/manifests/${digest}`,
+      expect.any(Object),
+    );
+    expect(pinned.digest).toBe(digest);
+    expect(pinned.manifest).toEqual(manifest);
+  });
+
+  it('prevents a moved tag from redirecting to different content', async () => {
+    const manifestA = makeManifest([
+      {
+        mediaType: 'application/vnd.oci.image.layer.v1.tar',
+        digest: `sha256:${'a'.repeat(64)}`,
+        size: 100,
+      },
+    ]);
+    const manifestB = makeManifest([
+      {
+        mediaType: 'application/vnd.oci.image.layer.v1.tar',
+        digest: `sha256:${'b'.repeat(64)}`,
+        size: 200,
+      },
+    ]);
+
+    const bufferA = Buffer.from(JSON.stringify(manifestA));
+    const digestA = `sha256:${createHash('sha256')
+      .update(bufferA)
+      .digest('hex')}`;
+
+    // Resolution: fetch by tag returns manifestA
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => bufferA,
+      headers: new Map(),
+    });
+
+    const resolution = await fetchManifest(
+      { registry: 'quay.io', repository: 'org/repo', tag: 'v1' },
+      pinningLogger,
+    );
+    expect(resolution.digest).toBe(digestA);
+
+    // Simulate: tag moves to manifestB, but we fetch by pinned digestA
+    // Registry returns manifestB content (different bytes) for the digest URL
+    // This would be a misbehaving registry — our verification catches it
+    jest.resetAllMocks();
+    const dns = require('node:dns');
+    (dns.promises.lookup as jest.Mock).mockResolvedValue([
+      { address: '93.184.216.34', family: 4 },
+    ]);
+    const bufferB = Buffer.from(JSON.stringify(manifestB));
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => bufferB,
+      headers: new Map(),
+    });
+
+    // Fetch by pinned digest — bytes don't match → should reject
+    await expect(
+      fetchManifest(
+        {
+          registry: 'quay.io',
+          repository: 'org/repo',
+          tag: 'v1',
+          digest: digestA,
+        },
+        pinningLogger,
+      ),
+    ).rejects.toThrow('Manifest digest mismatch');
+  });
+});
+
+describe('fetchBlob', () => {
+  const logger = {
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+  } as unknown as LoggerService;
+
+  beforeEach(() => {
+    // Re-establish the DNS mock after resetAllMocks clears it.
+    const dns = require('node:dns');
+    (dns.promises.lookup as jest.Mock).mockResolvedValue([
+      { address: '93.184.216.34', family: 4 },
+    ]);
+  });
+
+  afterEach(() => {
+    jest.resetAllMocks();
+  });
+
+  it('should fetch and return blob as buffer with digest verification', async () => {
+    const content = 'name: test-skill';
+    const contentBuffer = Buffer.from(content);
+    const hash = createHash('sha256').update(contentBuffer).digest('hex');
+    const digest = `sha256:${hash}`;
+    const arrayBuffer = new TextEncoder().encode(content).buffer;
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => arrayBuffer,
+      headers: new Map(),
+    });
+
+    const result = await fetchBlob(
+      { registry: 'quay.io', repository: 'org/repo', tag: 'v1' },
+      digest,
+      content.length,
+      logger,
+    );
+    expect(result.toString('utf-8')).toBe(content);
+  });
+
+  it('should throw on non-ok response', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 500,
+      statusText: 'Internal Server Error',
+      headers: new Map(),
+    });
+
+    await expect(
+      fetchBlob(
+        { registry: 'quay.io', repository: 'org/repo', tag: 'v1' },
+        validSha256Digest,
+        100,
+        logger,
+      ),
+    ).rejects.toThrow('Failed to fetch blob');
+  });
+
+  it('should cancel redirect response bodies and strip credentials cross-origin', async () => {
+    const content = Buffer.from('blob');
+    const digest = `sha256:${createHash('sha256')
+      .update(content)
+      .digest('hex')}`;
+    const cancel = jest.fn().mockResolvedValue(undefined);
+
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 307,
+        headers: {
+          get: (key: string) =>
+            key === 'location' ? 'https://cdn.example.com/blob' : null,
+        },
+        body: { cancel },
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        arrayBuffer: async () =>
+          content.buffer.slice(
+            content.byteOffset,
+            content.byteOffset + content.byteLength,
+          ),
+        headers: new Map(),
+      });
+
+    await expect(
+      fetchBlob(
+        {
+          registry: 'registry.example.com',
+          repository: 'org/repo',
+          tag: 'v1',
+        },
+        digest,
+        content.length,
+        logger,
+        { username: 'user', password: 'secret' },
+        undefined,
+        {
+          ...DEFAULT_SKILL_IMAGE_OPTIONS,
+          allowedOrigins: ['https://cdn.example.com'],
+        },
+      ),
+    ).resolves.toEqual(content);
+    expect(cancel).toHaveBeenCalled();
+    expect(
+      new Headers((global.fetch as jest.Mock).mock.calls[1][1].headers).get(
+        'authorization',
+      ),
+    ).toBeNull();
+  });
+
+  it.each([
+    ['http://cdn.example.com/blob', 'HTTPS'],
+    ['https://localhost/blob', 'public hostname'],
+    ['https://127.0.0.1/blob', 'public hostname'],
+    ['https://[::1]/blob', 'public hostname'],
+  ])(
+    'should reject an unsafe redirect target: %s',
+    async (location, expectedMsg) => {
+      const cancel = jest.fn().mockResolvedValue(undefined);
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 302,
+        headers: { get: () => location },
+        body: { cancel },
+      });
+
+      await expect(
+        fetchBlob(
+          { registry: 'quay.io', repository: 'org/repo', tag: 'v1' },
+          validSha256Digest,
+          1,
+          logger,
+        ),
+      ).rejects.toThrow(expectedMsg);
+      expect(cancel).toHaveBeenCalled();
+    },
+  );
+
+  it('should reject redirects without a Location header', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 302,
+      headers: { get: () => null },
+      body: { cancel: jest.fn().mockResolvedValue(undefined) },
+    });
+
+    await expect(
+      fetchBlob(
+        { registry: 'quay.io', repository: 'org/repo', tag: 'v1' },
+        validSha256Digest,
+        1,
+        logger,
+      ),
+    ).rejects.toThrow('did not include a Location');
+  });
+
+  it('should reject a redirect whose hostname resolves to a private IP (DNS rebinding)', async () => {
+    const dns = require('node:dns');
+    // First call is for the initial request to quay.io (public IP),
+    // second call is for the redirect target (private IP).
+    (dns.promises.lookup as jest.Mock)
+      .mockResolvedValueOnce([{ address: '93.184.216.34', family: 4 }])
+      .mockResolvedValueOnce([{ address: '10.0.0.1', family: 4 }]);
+    const cancel = jest.fn().mockResolvedValue(undefined);
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 302,
+      headers: { get: () => 'https://quay.io/blob' },
+      body: { cancel },
+    });
+
+    await expect(
+      fetchBlob(
+        { registry: 'quay.io', repository: 'org/repo', tag: 'v1' },
+        validSha256Digest,
+        1,
+        logger,
+      ),
+    ).rejects.toThrow('non-public address');
+  });
+
+  it('should enforce the maximum redirect count (5 per D7)', async () => {
+    // MAX_REDIRECTS is 5, so 6 redirect responses should trigger the limit.
+    // The first fetch is the initial request; then 5 redirects are followed,
+    // and the 6th would exceed the limit.
+    const responses = Array.from({ length: 6 }, (_, index) => ({
+      ok: false,
+      status: 307,
+      headers: { get: () => `https://quay.io/blob-${index}` },
+      body: { cancel: jest.fn().mockResolvedValue(undefined) },
+    }));
+    global.fetch = jest.fn();
+    for (const response of responses) {
+      (global.fetch as jest.Mock).mockResolvedValueOnce(response);
+    }
+
+    await expect(
+      fetchBlob(
+        { registry: 'quay.io', repository: 'org/repo', tag: 'v1' },
+        validSha256Digest,
+        1,
+        logger,
+      ),
+    ).rejects.toThrow('maximum redirect count');
+    expect(global.fetch).toHaveBeenCalledTimes(6);
+  });
+
+  it('should reject a blob whose content size differs from its descriptor', async () => {
+    const content = Buffer.from('actual content');
+    const digest = `sha256:${createHash('sha256')
+      .update(content)
+      .digest('hex')}`;
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () =>
+        content.buffer.slice(
+          content.byteOffset,
+          content.byteOffset + content.byteLength,
+        ),
+      headers: new Map(),
+    });
+
+    await expect(
+      fetchBlob(
+        { registry: 'quay.io', repository: 'org/repo', tag: 'v1' },
+        digest,
+        content.length + 1,
+        logger,
+      ),
+    ).rejects.toThrow('size mismatch');
+  });
+
+  it('enforces a configured blob size independently of its declared size', async () => {
+    global.fetch = jest.fn().mockResolvedValue(new Response('oversized'));
+    await expect(
+      fetchBlob(
+        { registry: 'quay.io', repository: 'org/repo', tag: 'v1' },
+        validSha256Digest,
+        4,
+        logger,
+        undefined,
+        undefined,
+        { ...DEFAULT_SKILL_IMAGE_OPTIONS, maxBlobSizeBytes: 4 },
+      ),
+    ).rejects.toThrow('maximum allowed size');
+  });
+
+  it('uses the configured blob size for the descriptor check before fetching', async () => {
+    global.fetch = jest.fn();
+    await expect(
+      fetchBlob(
+        { registry: 'quay.io', repository: 'org/repo', tag: 'v1' },
+        validSha256Digest,
+        5,
+        logger,
+        undefined,
+        undefined,
+        { ...DEFAULT_SKILL_IMAGE_OPTIONS, maxBlobSizeBytes: 4 },
+      ),
+    ).rejects.toThrow('maximum allowed size');
+    expect(global.fetch).not.toHaveBeenCalled();
+  });
+
+  it('should throw when expected size exceeds maximum', async () => {
+    await expect(
+      fetchBlob(
+        { registry: 'quay.io', repository: 'org/repo', tag: 'v1' },
+        validSha256Digest,
+        100 * 1024 * 1024, // 100 MB
+        logger,
+      ),
+    ).rejects.toThrow('exceeds maximum allowed size');
+  });
+
+  it('should throw on digest mismatch', async () => {
+    const content = 'tampered content';
+    const arrayBuffer = new TextEncoder().encode(content).buffer;
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () => arrayBuffer,
+      headers: new Map(),
+    });
+
+    await expect(
+      fetchBlob(
+        { registry: 'quay.io', repository: 'org/repo', tag: 'v1' },
+        'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+        content.length,
+        logger,
+      ),
+    ).rejects.toThrow('Blob digest mismatch');
+  });
+
+  it('should throw when fetch itself rejects', async () => {
+    global.fetch = jest.fn().mockRejectedValue(new Error('Connection refused'));
+
+    await expect(
+      fetchBlob(
+        { registry: 'quay.io', repository: 'org/repo', tag: 'v1' },
+        validSha256Digest,
+        100,
+        logger,
+      ),
+    ).rejects.toThrow('Connection refused');
+  });
+
+  it('should verify sha512 digests', async () => {
+    const content = Buffer.from('sha512 content');
+    const digest = `sha512:${createHash('sha512')
+      .update(content)
+      .digest('hex')}`;
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      arrayBuffer: async () =>
+        content.buffer.slice(
+          content.byteOffset,
+          content.byteOffset + content.byteLength,
+        ),
+      headers: new Map(),
+    });
+
+    await expect(
+      fetchBlob(
+        { registry: 'quay.io', repository: 'org/repo', tag: 'v1' },
+        digest,
+        content.length,
+        logger,
+      ),
+    ).resolves.toEqual(content);
+  });
+
+  it('should enforce the size limit while streaming a blob', async () => {
+    const content = Buffer.from('streamed content');
+    const digest = `sha256:${createHash('sha256')
+      .update(content)
+      .digest('hex')}`;
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(content);
+        controller.close();
+      },
+    });
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      body,
+      headers: new Map(),
+    });
+
+    await expect(
+      fetchBlob(
+        { registry: 'quay.io', repository: 'org/repo', tag: 'v1' },
+        digest,
+        content.length,
+        logger,
+      ),
+    ).resolves.toEqual(content);
+  });
+});
+
+describe('isPrivateAddress', () => {
+  it.each([
+    ['10.0.0.1', 4],
+    ['10.255.255.255', 4],
+    ['127.0.0.1', 4],
+    ['127.255.255.255', 4],
+    ['192.168.0.1', 4],
+    ['192.168.255.255', 4],
+    ['172.16.0.1', 4],
+    ['172.31.255.255', 4],
+    ['169.254.0.1', 4],
+    ['0.0.0.0', 4],
+    ['100.64.0.1', 4],
+    ['100.127.255.255', 4],
+    ['198.18.0.1', 4],
+    ['198.19.0.1', 4],
+    ['240.0.0.1', 4],
+  ])('should detect IPv4 private address %s', (address, family) => {
+    expect(isPrivateAddress(address, family)).toBe(true);
+  });
+
+  it.each([
+    ['8.8.8.8', 4],
+    ['1.1.1.1', 4],
+    ['172.15.255.255', 4],
+    ['172.32.0.0', 4],
+    ['100.63.255.255', 4],
+    ['100.128.0.0', 4],
+    ['198.17.255.255', 4],
+    ['198.20.0.0', 4],
+  ])('should allow IPv4 public address %s', (address, family) => {
+    expect(isPrivateAddress(address, family)).toBe(false);
+  });
+
+  it.each([
+    ['::1', 6],
+    ['::', 6],
+    ['fe80::1', 6],
+    ['fd00::1', 6],
+    ['fc00::1', 6],
+  ])('should detect IPv6 private address %s', (address, family) => {
+    expect(isPrivateAddress(address, family)).toBe(true);
+  });
+
+  it.each([['2607:f8b0:4004:800::200e', 6]])(
+    'should allow IPv6 public address %s',
+    (address, family) => {
+      expect(isPrivateAddress(address, family)).toBe(false);
+    },
+  );
+
+  it('should detect private IPv4-mapped IPv6 address', () => {
+    expect(isPrivateAddress('::ffff:10.0.0.1', 6)).toBe(true);
+    expect(isPrivateAddress('::ffff:192.168.1.1', 6)).toBe(true);
+  });
+
+  it('should allow public IPv4-mapped IPv6 address', () => {
+    expect(isPrivateAddress('::ffff:8.8.8.8', 6)).toBe(false);
+  });
+
+  it('should deny unknown address family', () => {
+    expect(isPrivateAddress('something', 99)).toBe(true);
+  });
+});
+
+describe('public destination classification regressions', () => {
+  it.each([
+    ['239.255.255.255', 4],
+    ['2001:db8::1', 6],
+    ['fe90::1', 6],
+    ['febf::1', 6],
+    ['::ffff:7f00:1', 6],
+    ['::ffff:c0a8:101', 6],
+    ['ff02::1', 6],
+    ['224.0.0.1', 4],
+  ])('rejects non-public address %s', (address, family) => {
+    expect(isPrivateAddress(address, family)).toBe(true);
+  });
+});
+
+describe('token endpoint destination policy', () => {
+  const logger = {
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+    child: jest.fn(),
+  } as unknown as LoggerService;
+  beforeEach(() => {
+    const dns = require('node:dns');
+    (dns.promises.lookup as jest.Mock)
+      .mockReset()
+      .mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+  });
+  it('rejects a token realm that resolves to a private destination before sending credentials', async () => {
+    const dns = require('node:dns');
+    (dns.promises.lookup as jest.Mock)
+      .mockResolvedValueOnce([{ address: '93.184.216.34', family: 4 }])
+      .mockResolvedValueOnce([{ address: '127.0.0.1', family: 4 }]);
+    global.fetch = jest.fn().mockResolvedValue(
+      new Response(null, {
+        status: 401,
+        headers: {
+          'www-authenticate': 'Bearer realm="https://quay.io/token"',
+        },
+      }),
+    );
+    await expect(
+      fetchManifest(
+        { registry: 'quay.io', repository: 'org/repo', tag: 'v1' },
+        logger,
+      ),
+    ).rejects.toThrow('non-public address');
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+  it('never follows token endpoint redirects, even to the same origin', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 401,
+          headers: {
+            'www-authenticate': 'Bearer realm="https://quay.io/token"',
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 307,
+          headers: { location: '/another-token' },
+        }),
+      );
+    await expect(
+      fetchManifest(
+        { registry: 'quay.io', repository: 'org/repo', tag: 'v1' },
+        logger,
+      ),
+    ).rejects.toThrow('maximum redirect count');
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+  });
+});

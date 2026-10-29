@@ -79,7 +79,18 @@ export class Extensions {
     ];
   }
 
+  async expandCollapsedSidebarGroup() {
+    if (process.env.APP_MODE === 'legacy') {
+      return;
+    }
+    await this.page
+      .locator('nav button:has(svg[data-testid="ExpandMoreIcon"])')
+      .first()
+      .click();
+  }
+
   async navigateToExtensions(navText: string) {
+    await this.expandCollapsedSidebarGroup();
     const navLink = this.page.getByRole('link', { name: 'Extensions' }).first();
     await navLink.waitFor({ state: 'visible', timeout: 15_000 });
     await navLink.click();
@@ -142,6 +153,24 @@ export class Extensions {
       await expect(this.page.getByRole('listbox')).toContainText(option);
     }
 
+    await this.page.keyboard.press('Escape');
+  }
+
+  private get catalogSourceOptions() {
+    return ['Red Hat', 'Community'] as const;
+  }
+
+  async catalogSourceFilters() {
+    const listbox = this.page.getByRole('listbox');
+    for (const option of this.catalogSourceOptions) {
+      await expect(listbox).toContainText(option);
+    }
+    await this.page.keyboard.press('Escape');
+  }
+
+  async selectCatalogSourceFilter(catalogSource: string) {
+    await this.selectDropdown(this.translations.search.catalogSource);
+    await this.toggleOption(catalogSource);
     await this.page.keyboard.press('Escape');
   }
 

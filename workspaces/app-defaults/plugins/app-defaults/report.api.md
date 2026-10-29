@@ -5,6 +5,7 @@
 ```ts
 import { AppDrawerContent } from '@red-hat-developer-hub/backstage-plugin-app-react';
 import { ConfigurableExtensionDataRef } from '@backstage/frontend-plugin-api';
+import { ExtensionBlueprintParams } from '@backstage/frontend-plugin-api';
 import { ExtensionDataRef } from '@backstage/frontend-plugin-api';
 import { ExtensionInput } from '@backstage/frontend-plugin-api';
 import { FrontendFeatureLoader } from '@backstage/frontend-plugin-api';
@@ -18,6 +19,7 @@ import { ReactNode } from 'react';
 import { SidebarElementData } from '@red-hat-developer-hub/backstage-plugin-app-react';
 import { SidebarItemData } from '@red-hat-developer-hub/backstage-plugin-app-react';
 import { SidebarItemGroupData } from '@red-hat-developer-hub/backstage-plugin-app-react';
+import { SwappableComponentRef } from '@backstage/frontend-plugin-api';
 import { TranslationRef } from '@backstage/frontend-plugin-api';
 import { TranslationResource } from '@backstage/frontend-plugin-api';
 
@@ -43,7 +45,6 @@ export const appDefaultsTranslationRef: TranslationRef<
     readonly 'docs.emptyState.title': 'No documentation available';
     readonly 'docs.emptyState.description': 'There are no documented entities yet, or you do not have permission to view any. Documentation will appear here once entities with TechDocs annotations are registered and you have access.';
     readonly 'docs.emptyState.importButtonTitle': 'Register a component';
-    readonly 'menuItem.learningPaths': 'Learning Paths';
     readonly 'learningPaths.title': 'Learning Paths';
     readonly 'learningPaths.error.title': 'Could not fetch data.';
     readonly 'learningPaths.error.unknownError': 'Unknown error';
@@ -56,7 +57,7 @@ export const appDefaultsTranslations: TranslationResource<'plugin.app-defaults'>
 // @public
 export const appDefaultsTranslationsModule: FrontendModule;
 
-// @public
+// @public @deprecated
 export const appDrawerExtension: OverridableExtensionDefinition<{
   config: {};
   configInput: {};
@@ -83,8 +84,38 @@ export const appDrawerExtension: OverridableExtensionDefinition<{
   };
 }>;
 
-// @public
+// @public @deprecated
 export const appDrawerModule: FrontendModule;
+
+// @public
+export const appLayoutExtension: OverridableExtensionDefinition<{
+  config: {};
+  configInput: {};
+  output: ExtensionDataRef<
+    (props: { children: ReactNode }) => JSX.Element | null,
+    'app.root.wrapper',
+    {}
+  >;
+  inputs: {
+    drawers: ExtensionInput<
+      ConfigurableExtensionDataRef<AppDrawerContent, 'app.drawer.content', {}>,
+      {
+        singleton: false;
+        optional: false;
+        internal: false;
+      }
+    >;
+  };
+  kind: 'app-root-wrapper';
+  name: 'drawer';
+  params: {
+    Component?: [error: 'Use the `component` parameter instead'];
+    component: (props: { children: ReactNode }) => JSX.Element | null;
+  };
+}>;
+
+// @public
+export const appLayoutModule: FrontendModule;
 
 // @public
 export const AppSidebar: (input: AppSidebarProps) => JSX_3.Element;
@@ -184,6 +215,54 @@ export default _default;
 
 // @public
 export const learningPathsModule: FrontendModule;
+
+// @public
+export const localizedPageLayoutExtension: OverridableExtensionDefinition<{
+  kind: 'component';
+  name: 'core-page-layout';
+  config: {};
+  configInput: {};
+  output: ExtensionDataRef<
+    {
+      ref: SwappableComponentRef;
+      loader:
+        | (() => (props: {}) => JSX.Element | null)
+        | (() => Promise<(props: {}) => JSX.Element | null>);
+    },
+    'core.swappableComponent',
+    {}
+  >;
+  inputs: {};
+  params: <Ref extends SwappableComponentRef<any>>(params: {
+    component: Ref extends SwappableComponentRef<
+      any,
+      infer IExternalComponentProps
+    >
+      ? {
+          ref: Ref;
+        } & ((props: IExternalComponentProps) => JSX.Element | null)
+      : never;
+    loader: Ref extends SwappableComponentRef<infer IInnerComponentProps, any>
+      ?
+          | (() => (props: IInnerComponentProps) => JSX.Element | null)
+          | (() => Promise<(props: IInnerComponentProps) => JSX.Element | null>)
+      : never;
+  }) => ExtensionBlueprintParams<{
+    component: Ref extends SwappableComponentRef<
+      any,
+      infer IExternalComponentProps
+    >
+      ? {
+          ref: Ref;
+        } & ((props: IExternalComponentProps) => JSX.Element | null)
+      : never;
+    loader: Ref extends SwappableComponentRef<infer IInnerComponentProps, any>
+      ?
+          | (() => (props: IInnerComponentProps) => JSX.Element | null)
+          | (() => Promise<(props: IInnerComponentProps) => JSX.Element | null>)
+      : never;
+  }>;
+}>;
 
 // @public
 export type LogoURLs =

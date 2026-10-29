@@ -1,5 +1,86 @@
 # @red-hat-developer-hub/backstage-plugin-scorecard-backend-module-openssf
 
+## 2.1.0
+
+### Minor Changes
+
+- 0a42ebd: Bump minor after the release-2.1 cut so main patch versions do not collide with the maintenance line on npm.
+
+### Patch Changes
+
+- Updated dependencies [0a42ebd]
+  - @red-hat-developer-hub/backstage-plugin-scorecard-common@4.6.0
+  - @red-hat-developer-hub/backstage-plugin-scorecard-node@4.6.0
+
+## 2.0.4
+
+### Patch Changes
+
+- fc01181: Add local development harnesses and contributor guides for the Scorecard plugin, backend, and metric modules. Tests cover the drill-down namespace query, the collectors route, and New Frontend System plugin wiring. No runtime behavior change.
+  - @red-hat-developer-hub/backstage-plugin-scorecard-common@4.5.2
+  - @red-hat-developer-hub/backstage-plugin-scorecard-node@4.5.2
+
+## 2.0.3
+
+### Patch Changes
+
+- @red-hat-developer-hub/backstage-plugin-scorecard-common@4.5.1
+- @red-hat-developer-hub/backstage-plugin-scorecard-node@4.5.1
+
+## 2.0.2
+
+### Patch Changes
+
+- dfcbf0d: Add missing `@public` release tags to all scorecard backend module exports and common types, and re-enable `ae-missing-release-tag` api-extractor warning.
+- Updated dependencies [dfcbf0d]
+- Updated dependencies [b8d8662]
+  - @red-hat-developer-hub/backstage-plugin-scorecard-common@4.5.0
+  - @red-hat-developer-hub/backstage-plugin-scorecard-node@4.5.0
+
+## 2.0.1
+
+### Patch Changes
+
+- @red-hat-developer-hub/backstage-plugin-scorecard-common@4.4.2
+- @red-hat-developer-hub/backstage-plugin-scorecard-node@4.4.2
+
+## 2.0.0
+
+### Major Changes
+
+- 23151ae: **BREAKING**: OpenSSF checks are now a single provider, `openssf.securityScorecard`, instead of one provider per check (`openssf.maintained`, `openssf.branchProtection`, and so on). All 18 checks are fetched in one HTTP request.
+
+  Metric IDs are unchanged. Catalog annotations that use the full metric ID (`scorecard.io/openssf.maintained.thresholds.rules.<key>`) stay the same.
+
+  `schedule` can be set only once, on `securityScorecard`, and applies to every check. Per-check `schedule` blocks are no longer read.
+
+  Shared thresholds move to that same provider key. A threshold that applied to only one check moves under `metrics.<metricName>`. If every check used the same rules, keep them only on `securityScorecard.thresholds` and omit `metrics`.
+
+  ```diff
+   scorecard:
+     metricProviders:
+       openssf:
+  -      maintained:
+  -        schedule: ...
+  -        thresholds: ...
+  -      branchProtection:
+  -        schedule: ...
+  -        thresholds: ...
+  +      securityScorecard:
+  +        schedule: ...
+  +        thresholds: ...
+  +        metrics:
+  +          maintained:
+  +            thresholds: ...
+  ```
+
+## 1.1.3
+
+### Patch Changes
+
+- @red-hat-developer-hub/backstage-plugin-scorecard-common@4.4.1
+- @red-hat-developer-hub/backstage-plugin-scorecard-node@4.4.1
+
 ## 1.1.2
 
 ### Patch Changes

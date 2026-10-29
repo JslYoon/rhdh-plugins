@@ -1,5 +1,44 @@
 # @red-hat-developer-hub/backstage-plugin-theme
 
+## 1.5.0
+
+### Minor Changes
+
+- 0a42ebd: Bump minor after the release-2.1 cut so main patch versions do not collide with the maintenance line on npm.
+
+## 1.4.2
+
+### Patch Changes
+
+- 85e46df: Fix missing BUI `component-overrides` CSS (e.g. Card borders) in production RHDH app bundles by expanding `sideEffects` to keep published `*.css.esm.js` styleInject modules from being tree-shaken.
+
+## 1.4.1
+
+### Patch Changes
+
+- c7605a3: Adopt Backstage yarn plugin for Backstage package version management
+- f8d9ade: Offset the fixed sidebar root below a full-width global header (`height: 100vh − header`, drawer fills the root) and hide the sidebar company logo when the masthead is present (PatternFly header + nav).
+- f8d9ade: Drop the page-inset top margin when a full-width global header sits above the content well, size the well to `100vh − header − bottom inset` so the bottom margin stays visible, and paint shell chrome with the RHDH page-inset background unless overridden in app branding theme config.
+- f8d9ade: Sync BUI page-inset shell CSS variables from branding chrome tokens so customized dark themes keep the outer app background matched to the sidebar and global header.
+- f8d9ade: Reserve a stable scrollbar gutter in the sidebar menu scroller so menu items do not shift horizontally when the scrollbar appears or disappears.
+- f8d9ade: Keep SidebarPage border-box left corners square under the drawer spacer so the sidebar is not clipped, while sticky corner masks still round the main content well against the nav.
+
+## 1.4.0
+
+### Minor Changes
+
+- a6ada16: Replace PageMainContainer with a CSS-only PatternFly page-inset: BackstageSidebarPage is the sole scrollport, clipped with `clip-path` so the scrollbar follows the rounded well (no extra DOM wrapper).
+
+## 1.3.0
+
+### Minor Changes
+
+- 8c7f13a: Align BUI theme styling with PatternFly v6: add PageMainContainer for page inset, and close gaps for typography, forms, menus, tooltips, popovers, and buttons.
+
+### Patch Changes
+
+- e93cf90: Limit the NFS theme module to the RHDH light and dark themes.
+
 ## 1.2.2
 
 ### Patch Changes

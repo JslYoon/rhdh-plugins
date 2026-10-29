@@ -18,6 +18,7 @@ import type { ExtensionDefinition } from '@backstage/frontend-plugin-api';
 import { createExtensionTester } from '@backstage/frontend-test-utils';
 import {
   sidebarElementDataRef,
+  sidebarItemDataRef,
   sidebarItemGroupDataRef,
   type SidebarElementData,
 } from '@red-hat-developer-hub/backstage-plugin-app-react';
@@ -25,14 +26,14 @@ import {
 import {
   defaultSidebarExtensions,
   sidebarAdminGroup,
-  sidebarBottomDivider,
   sidebarBottomSpacer,
+  sidebarCreateItem,
   sidebarLogoElement,
   sidebarLogoSpacer,
   sidebarNotificationsElement,
   sidebarSearchDivider,
   sidebarSearchElement,
-  sidebarSettingsDivider,
+  sidebarSearchItem,
   sidebarSettingsGroup,
 } from './defaultSidebarExtensions';
 import { CompanyLogo } from './logo/CompanyLogo';
@@ -44,7 +45,7 @@ const priorityOf = (ext: ExtensionDefinition) =>
     .priority;
 
 describe('defaultSidebarExtensions', () => {
-  it('registers logo, gap, search, spacer, dividers, notifications and groups', () => {
+  it('registers logo, gap, search, spacer, notifications and groups', () => {
     const specs = defaultSidebarExtensions.map(ext =>
       JSON.parse(JSON.stringify(ext)),
     );
@@ -52,12 +53,12 @@ describe('defaultSidebarExtensions', () => {
     expect(specs.map(s => `${s.kind}/${s.name}`)).toEqual([
       'sidebar-element/logo',
       'sidebar-spacer/logo',
+      'sidebar-item/search',
+      'sidebar-item/create',
       'sidebar-element/search',
       'sidebar-divider/search',
       'sidebar-spacer/bottom',
-      'sidebar-divider/bottom',
       'sidebar-element/notifications',
-      'sidebar-divider/settings',
       'sidebar-item-group/admin',
       'sidebar-item/rbac',
       'sidebar-item-group/settings',
@@ -75,7 +76,7 @@ describe('defaultSidebarExtensions', () => {
     );
   });
 
-  it('disables the search and notifications elements by default', () => {
+  it('disables the search modal, its divider and notifications by default', () => {
     const disabledById = Object.fromEntries(
       defaultSidebarExtensions.map(ext => {
         const spec = JSON.parse(JSON.stringify(ext));
@@ -84,12 +85,24 @@ describe('defaultSidebarExtensions', () => {
     );
 
     expect(disabledById['sidebar-element/search']).toBe(true);
+    expect(disabledById['sidebar-divider/search']).toBe(true);
     expect(disabledById['sidebar-element/notifications']).toBe(true);
     // Other default entries stay enabled.
+    expect(disabledById['sidebar-item/search']).toBeFalsy();
+    expect(disabledById['sidebar-item/create']).toBeFalsy();
     expect(disabledById['sidebar-element/logo']).toBeFalsy();
   });
 
-  it('orders search first and the bottom block below the spacer', () => {
+  it('claims the search and create pages with title-less items so they are not listed', () => {
+    expect(
+      createExtensionTester(sidebarSearchItem).get(sidebarItemDataRef),
+    ).toMatchObject({ title: '', to: '/search' });
+    expect(
+      createExtensionTester(sidebarCreateItem).get(sidebarItemDataRef),
+    ).toMatchObject({ title: '', to: '/create' });
+  });
+
+  it('orders search first and the bottom spacer below chrome', () => {
     expect(priorityOf(sidebarLogoElement)).toBeGreaterThan(
       priorityOf(sidebarLogoSpacer)!,
     );
@@ -102,18 +115,12 @@ describe('defaultSidebarExtensions', () => {
     );
     expect(priorityOf(sidebarSearchDivider)).toBeGreaterThan(0);
     expect(priorityOf(sidebarBottomSpacer)).toBeLessThan(0);
-    expect(priorityOf(sidebarBottomDivider)).toBeLessThan(
-      priorityOf(sidebarBottomSpacer)!,
-    );
     expect(priorityOf(sidebarNotificationsElement)).toBeLessThan(
-      priorityOf(sidebarBottomDivider)!,
-    );
-    expect(priorityOf(sidebarSettingsDivider)).toBeLessThan(
-      priorityOf(sidebarNotificationsElement)!,
+      priorityOf(sidebarBottomSpacer)!,
     );
   });
 
-  it('places the admin group above settings, below the settings divider', () => {
+  it('places the admin group above settings', () => {
     const admin = createExtensionTester(sidebarAdminGroup).get(
       sidebarItemGroupDataRef,
     );
@@ -128,7 +135,6 @@ describe('defaultSidebarExtensions', () => {
       title: 'Settings',
       to: '/settings',
     });
-    expect(admin.priority!).toBeLessThan(priorityOf(sidebarSettingsDivider)!);
     expect(settings.priority!).toBeLessThan(admin.priority!);
   });
 

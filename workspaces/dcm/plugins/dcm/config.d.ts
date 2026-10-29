@@ -23,5 +23,20 @@ export interface Config {
      * @visibility frontend
      */
     policyPacks?: string[];
+
+    /**
+     * Whether the DCM control plane requires per-user OIDC authentication.
+     *
+     * Must match the control plane's `auth.enabled` setting.
+     * Defaults to false when unset.
+     *
+     * @visibility frontend
+     */
+    auth?: {
+      /**
+       * @visibility frontend
+       */
+      enabled?: boolean;
+    };
   };
 }

@@ -1,5 +1,37 @@
 # @red-hat-developer-hub/backstage-plugin-adoption-insights
 
+## 1.1.0
+
+### Minor Changes
+
+- 0a42ebd: Bump minor after the release-2.1 cut so main patch versions do not collide with the maintenance line on npm.
+
+### Patch Changes
+
+- Updated dependencies [0a42ebd]
+  - @red-hat-developer-hub/backstage-plugin-adoption-insights-common@1.1.0
+
+## 1.0.4
+
+### Patch Changes
+
+- 7a0b7d2: Register the Adoption Insights nav entry through `SidebarItemBlueprint` in the `admin` group, and adopt RHDH app-defaults for the NFS demo app sidebar instead of a custom nav module.
+  - @red-hat-developer-hub/backstage-plugin-adoption-insights-common@1.0.4
+
+## 1.0.3
+
+### Patch Changes
+
+- ea52ee5: Updated dependency `@red-hat-developer-hub/backstage-plugin-theme` to `^0.15.0`.
+  - @red-hat-developer-hub/backstage-plugin-adoption-insights-common@1.0.3
+
+## 1.0.2
+
+### Patch Changes
+
+- f5f0d02: Updated translations for RHDH 2.1 (s3297).
+  - @red-hat-developer-hub/backstage-plugin-adoption-insights-common@1.0.2
+
 ## 1.0.1
 
 ### Patch Changes

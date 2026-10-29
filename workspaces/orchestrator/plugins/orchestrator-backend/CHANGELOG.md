@@ -1,5 +1,34 @@
 # @red-hat-developer-hub/backstage-plugin-orchestrator-backend
 
+## 8.14.0
+
+### Minor Changes
+
+- 0a42ebd: Bump minor after the release-2.1 cut so main patch versions do not collide with the maintenance line on npm.
+
+### Patch Changes
+
+- a0b1bb1: Fix the Orchestrator runs list failing with `Invalid unit value NaN` when a workflow run has a missing or invalid `start` timestamp. The duration is now omitted instead of throwing.
+- Updated dependencies [0a42ebd]
+  - @red-hat-developer-hub/backstage-plugin-orchestrator-common@3.12.0
+  - @red-hat-developer-hub/backstage-plugin-orchestrator-node@1.6.0
+
+## 8.13.3
+
+### Patch Changes
+
+- fb4ecee: Updated dependency `prettier` to `3.9.9`.
+- Updated dependencies [a577327]
+  - @red-hat-developer-hub/backstage-plugin-orchestrator-common@3.11.1
+  - @red-hat-developer-hub/backstage-plugin-orchestrator-node@1.5.2
+
+## 8.13.2
+
+### Patch Changes
+
+- 2bebbeb: Updated dependency `prettier` to `3.9.8`.
+- 22ab37c: Updated dependency `prettier` to `3.9.7`.
+
 ## 8.13.1
 
 ### Patch Changes

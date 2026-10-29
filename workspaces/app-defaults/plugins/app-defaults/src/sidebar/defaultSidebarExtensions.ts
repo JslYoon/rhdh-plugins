@@ -32,26 +32,37 @@ import { SidebarSearch } from './SidebarSearch';
 /**
  * Default sidebar layout shipped with the app defaults module.
  *
- * Top to bottom: the company logo, a small gap, the search modal, a divider,
- * everything contributed at priority 0
- * (auto-discovered pages, plugin items and groups), a spacer that pushes the
- * rest to the bottom, a divider, the notifications item, a final divider,
- * the Administration group, and the Settings group. The search modal and
- * the notifications item declare their page paths, so the plain
- * auto-discovered entries for the search and notifications pages are hidden.
+ * Top to bottom: the company logo, a small gap, the search, a divider
+ * below search, then three menu sections rendered by `AppSidebar`:
+ * 1. default / built-in items (path allowlist),
+ * 2. optional plugin items (with a divider only when this section is non-empty),
+ * 3. a spacer, then Administration / Settings / notifications (with a divider
+ *    only when the bottom block has visible entries).
+ *
+ * The search and the notifications item declare their page paths, so
+ * the plain auto-discovered entries for those pages are hidden. The search
+ * and notifications stay disabled until opted in; while the search
+ * is disabled, a title-less placeholder item claims `/search` so the
+ * Search page is not listed either. Another title-less item claims `/create`
+ * to keep the scaffolder page out of the menu.
  *
  * The Administration group has no link of its own; it ships with the RBAC
  * item and collects any further items plugins contribute with
  * `group: 'admin'`. The RBAC item is route-guarded, so the group stays
- * hidden until the RBAC plugin (or another admin item) is present. The
- * Settings group links to the settings page and replaces the
- * auto-discovered settings entry; plugins can add items with
- * `group: 'settings'`.
+ * hidden until the RBAC plugin (or another admin item) is present.
+ * `AppSidebar` also hides Administration for users without admin permission.
+ * The Settings group links to the settings page; it is hidden by default when
+ * the global header is present and can be forced with `app.sidebar.settings`.
+ * The company logo is likewise hidden when the global header is present and
+ * can be forced with `app.sidebar.logo`.
  *
  * Each element can be disabled or moved from `app-config.yaml`, e.g.
  *
  * ```yaml
  * app:
+ *   sidebar:
+ *     settings: true
+ *     logo: true
  *   extensions:
  *     - sidebar-element:app/notifications: false
  *     - sidebar-spacer:app/bottom:
@@ -76,8 +87,41 @@ export const sidebarLogoSpacer = SidebarSpacerBlueprint.make({
 });
 
 /**
- * Search modal pinned to the top. Disabled by default; enable via
- * `app-config.yaml`. Extension ID: `sidebar-element:app/search`.
+ * Placeholder item that claims `/search` with an empty title. Items without a
+ * title are never rendered, but they still take over placement of the page
+ * they link to, so the auto-discovered Search page does not appear as a
+ * regular middle-section item while the search below is disabled.
+ * Extension ID: `sidebar-item:app/search`. Disable it (or give it a title)
+ * via `app-config.yaml` to show the plain Search entry again.
+ */
+export const sidebarSearchItem = SidebarItemBlueprint.make({
+  name: 'search',
+  params: {
+    title: '',
+    to: '/search',
+  },
+});
+
+/**
+ * Placeholder item that claims `/create` with an empty title, so the
+ * auto-discovered scaffolder (Self-Service) page does not appear in the menu.
+ * Extension ID: `sidebar-item:app/create`. Disable it (or give it a title)
+ * via `app-config.yaml` to show the Create entry again.
+ */
+export const sidebarCreateItem = SidebarItemBlueprint.make({
+  name: 'create',
+  params: {
+    title: '',
+    to: '/create',
+  },
+});
+
+/**
+ * Search entry shown below the company logo when enabled. Extension ID:
+ * `sidebar-element:app/search`.
+ * Disabled by default; enable via `app-config.yaml`.
+ * Claims `/search` so the auto-discovered Search page does not appear as a
+ * regular middle-section item.
  */
 export const sidebarSearchElement = SidebarElementBlueprint.make({
   name: 'search',
@@ -89,9 +133,14 @@ export const sidebarSearchElement = SidebarElementBlueprint.make({
   },
 });
 
-/** Divider below the search. Extension ID: `sidebar-divider:app/search`. */
+/**
+ * Divider below the search. Extension ID: `sidebar-divider:app/search`.
+ * Disabled by default; enable via `app-config.yaml` if you enable the
+ * search with extension ID: `sidebar-element:app/search`.
+ */
 export const sidebarSearchDivider = SidebarDividerBlueprint.make({
   name: 'search',
+  disabled: true,
   params: { priority: 900 },
 });
 
@@ -99,12 +148,6 @@ export const sidebarSearchDivider = SidebarDividerBlueprint.make({
 export const sidebarBottomSpacer = SidebarSpacerBlueprint.make({
   name: 'bottom',
   params: { priority: -30, grow: true },
-});
-
-/** Separates the bottom block. Extension ID: `sidebar-divider:app/bottom`. */
-export const sidebarBottomDivider = SidebarDividerBlueprint.make({
-  name: 'bottom',
-  params: { priority: -35 },
 });
 
 /**
@@ -119,12 +162,6 @@ export const sidebarNotificationsElement = SidebarElementBlueprint.make({
     to: '/notifications',
     priority: -40,
   },
-});
-
-/** Divider above the settings block. Extension ID: `sidebar-divider:app/settings`. */
-export const sidebarSettingsDivider = SidebarDividerBlueprint.make({
-  name: 'settings',
-  params: { priority: -90 },
 });
 
 /**
@@ -181,12 +218,12 @@ export const sidebarSettingsGroup = SidebarItemGroupBlueprint.make({
 export const defaultSidebarExtensions = [
   sidebarLogoElement,
   sidebarLogoSpacer,
+  sidebarSearchItem,
+  sidebarCreateItem,
   sidebarSearchElement,
   sidebarSearchDivider,
   sidebarBottomSpacer,
-  sidebarBottomDivider,
   sidebarNotificationsElement,
-  sidebarSettingsDivider,
   sidebarAdminGroup,
   sidebarRbacItem,
   sidebarSettingsGroup,

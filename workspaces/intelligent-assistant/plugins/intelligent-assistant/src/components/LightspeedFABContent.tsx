@@ -20,9 +20,12 @@ import Box from '@mui/material/Box';
 import Fab from '@mui/material/Fab';
 import { useTheme } from '@mui/material/styles';
 import Tooltip from '@mui/material/Tooltip';
-import { ChatbotDisplayMode } from '@patternfly/chatbot';
 
-import { DOCKED_CONTENT_OFFSET, LIGHTSPEED_FAB_ELEMENT_ID } from '../const';
+import {
+  ChatbotDisplayMode,
+  DOCKED_CONTENT_OFFSET,
+  LIGHTSPEED_FAB_ELEMENT_ID,
+} from '../const';
 import { useIaChatPermission } from '../hooks/useIaChatPermission';
 import { useIaNotebooksPermission } from '../hooks/useIaNotebooksPermission';
 import { useLightspeedDrawerContext } from '../hooks/useLightspeedDrawerContext';
@@ -30,6 +33,7 @@ import { useTranslation } from '../hooks/useTranslation';
 import {
   clearLightspeedFabAnchorVars,
   getLightspeedFabEdgeInset,
+  getLightspeedFabInlineEdgeInset,
   publishLightspeedFabAnchorVars,
 } from '../utils/fab-anchor-utils';
 import { LightspeedFABIcon, LightspeedFABOpenIcon } from './LightspeedIcon';
@@ -48,7 +52,8 @@ export const LightspeedFABContent = () => {
     chatPermissionLoading || notebooksPermissionLoading;
   const hasPluginAccess = hasChatAccess || hasNotebooksAccess;
   const fabRef = useRef<HTMLDivElement>(null);
-  const fabEdgeInset = getLightspeedFabEdgeInset(theme);
+  const fabBlockEndInset = getLightspeedFabEdgeInset(theme);
+  const fabInlineEndInset = getLightspeedFabInlineEdgeInset(theme);
 
   useLayoutEffect(() => {
     const fab = fabRef.current;
@@ -83,6 +88,22 @@ export const LightspeedFABContent = () => {
     };
   }, [displayMode, theme]);
 
+  // Re-measure when the overlay opens so bottom/right track the FAB (see LIGHTSPEED_OVERLAY_*).
+  useLayoutEffect(() => {
+    if (!isChatbotActive) {
+      return undefined;
+    }
+    const fab = fabRef.current;
+    if (!fab) {
+      return undefined;
+    }
+    const syncAnchor = () =>
+      publishLightspeedFabAnchorVars({ fabElement: fab, theme });
+    syncAnchor();
+    const frame = requestAnimationFrame(syncAnchor);
+    return () => cancelAnimationFrame(frame);
+  }, [isChatbotActive, theme]);
+
   if (displayMode === ChatbotDisplayMode.embedded) {
     return null;
   }
@@ -95,8 +116,8 @@ export const LightspeedFABContent = () => {
     <Box
       ref={fabRef}
       sx={{
-        bottom: fabEdgeInset,
-        right: fabEdgeInset,
+        bottom: fabBlockEndInset,
+        right: fabInlineEndInset,
         alignItems: 'end',
         zIndex: theme.zIndex.tooltip,
         display: 'flex',
@@ -122,11 +143,17 @@ export const LightspeedFABContent = () => {
             isChatbotActive ? t('tooltip.fab.close') : t('tooltip.fab.open')
           }
           sx={{
-            backgroundColor: theme.palette.background.default,
+            // Defend circle + opacity against leaked button CSS (MUI v4/v5 and
+            // PatternFly chat styles share the page). Rebrand keeps a surface
+            // fill; !important restores the solid circular FAB.
+            borderRadius: '50% !important',
+            opacity: '1 !important',
+            backgroundColor: `${theme.palette.background.paper} !important`,
             color: theme.palette.text.primary,
             border: `1px solid ${theme.palette.divider}`,
+            boxShadow: `${theme.shadows[6]} !important`,
             '&:hover': {
-              backgroundColor: theme.palette.background.paper,
+              backgroundColor: `${theme.palette.background.paper} !important`,
             },
           }}
         >

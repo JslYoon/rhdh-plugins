@@ -26,7 +26,6 @@ import {
   expectChatInputValue,
   openChatbot,
   openChatHistoryDrawer,
-  waitForBackstageCatalogReady,
   waitForChatMessageLoadingHidden,
 } from './LightspeedPage';
 
@@ -152,7 +151,6 @@ export class SavedPromptsPage {
   async openOverlayWithPrompts(prompts: SavedPromptMock[]): Promise<void> {
     await this.page.goto('/catalog');
     await loginAsGuest(this.page);
-    await waitForBackstageCatalogReady(this.page);
     await this.resetChatbotOverlay();
 
     // Re-register the route and seed in-memory data for this page.
@@ -160,7 +158,6 @@ export class SavedPromptsPage {
 
     // React Query caches saved prompts for 5 minutes — reload clears stale [].
     await this.page.reload();
-    await waitForBackstageCatalogReady(this.page);
 
     const savedPromptsResponse =
       prompts.length > 0 ? this.waitForSavedPromptsFetch() : null;
@@ -230,6 +227,8 @@ export class SavedPromptsPage {
     await expect(
       this.chatbotRegion().getByRole('heading', {
         name: this.t['settings.panel.title'],
+        exact: true,
+        level: 2,
       }),
     ).toBeVisible();
     await expect(this.newPromptButton()).toBeVisible();
@@ -316,7 +315,10 @@ export class SavedPromptsPage {
       .getByRole('menuitem', { name: this.t['settings.mcp.label'] })
       .click();
     await this.page
-      .getByRole('button', { name: this.t['savedPrompts.tab.title'] })
+      .getByRole('button', {
+        name: this.t['savedPrompts.tab.title'],
+        exact: true,
+      })
       .click();
     await expect(this.newPromptButton()).toBeVisible();
   }

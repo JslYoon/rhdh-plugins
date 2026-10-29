@@ -1,5 +1,41 @@
 # @red-hat-developer-hub/backstage-plugin-homepage
 
+## 3.2.0
+
+### Minor Changes
+
+- 0a42ebd: Bump minor after the release-2.1 cut so main patch versions do not collide with the maintenance line on npm.
+
+### Patch Changes
+
+- Updated dependencies [0a42ebd]
+  - @red-hat-developer-hub/backstage-plugin-homepage-common@0.7.0
+
+## 3.1.0
+
+### Minor Changes
+
+- d471129: Allow a read-only NFS homepage to forward widget props from `widgetLayout`, including several copies of the same widget with different props.
+
+### Patch Changes
+
+- a669321: Updated dependency `@testing-library/user-event` to `14.6.7`.
+
+## 3.0.0
+
+### Major Changes
+
+- 860ea4f: Remove the `/legacy` subpath export and the legacy frontend system plugin implementation.
+
+### Minor Changes
+
+- ad959e1: Give the homepage NFS plugin its own configurable page (`page:homepage`) so it works without community `@backstage/plugin-home`, and apply persona-based `homepage.defaultWidgets` filtering only on that page via homepage-backend. When `homepageHomeModule` is installed, the same widgets are also registered on community `page:home` (without the RH layout / homepage-backend filtering). Community `page:home` and `page:homepage` can be enabled or disabled independently via app-config.
+
+### Patch Changes
+
+- d378db5: Remove the deprecated `/alpha` subpath export now that NFS modules have graduated to the primary package entry point.
+- f5f0d02: Updated translations for RHDH 2.1 (s3297).
+
 ## 2.0.0
 
 ### Major Changes

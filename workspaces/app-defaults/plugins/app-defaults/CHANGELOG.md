@@ -1,5 +1,116 @@
 # @red-hat-developer-hub/backstage-plugin-app-defaults
 
+## 1.13.0
+
+### Minor Changes
+
+- 0a42ebd: Bump minor after the release-2.1 cut so main patch versions do not collide with the maintenance line on npm.
+
+### Patch Changes
+
+- Updated dependencies [0a42ebd]
+  - @red-hat-developer-hub/backstage-plugin-app-react@1.13.0
+
+## 1.12.2
+
+### Patch Changes
+
+- 5405510: Remove the redundant Search entry from the sidebar menu. Title-less sidebar items are no longer rendered but still claim their page path, and the default sidebar now ships such placeholder items for `/search` and `/create`. The search modal is disabled by default.
+- 479e8c5: Fix sidebar Search crashing with `No path for routeRef{type=absolute,id=search}` when the search routeRef is unbound under module federation. Fall back to a plain `/search` sidebar link when the route is missing.
+- Updated dependencies [5405510]
+  - @red-hat-developer-hub/backstage-plugin-app-react@1.12.2
+
+## 1.12.1
+
+### Patch Changes
+
+- 50ec702: Give built-in default sidebar pages OFS `DefaultMainMenuItems` priorities (Home 100, Catalog 80, APIs 70, Docs 65, Learning Paths 60, Create 50) when no explicit priority is set, so Home sorts above Create. Default-path items stay in the top menu section even with positive priority (chrome remains for logo/search and other non-default positive entries).
+  - @red-hat-developer-hub/backstage-plugin-app-react@1.12.1
+
+## 1.12.0
+
+### Minor Changes
+
+- f8d9ade: Split the NFS sidebar into default, optional-plugin, and admin/settings sections with conditional dividers. Hide Settings and the company logo by default when the global header is present (`app.sidebar.settings` / `app.sidebar.logo` override), and hide Administration when the user lacks admin permission or the group has no visible children. Offset the fixed sidebar root below the masthead (`height: 100vh − header`) with the drawer filling the root, and use a stable scrollbar gutter in the menu scroller so items do not shift when the scrollbar appears.
+
+### Patch Changes
+
+- f010913: Stack Dependencies tab info and list cards full width below the Dependencies-specific lg breakpoint (1400px) so tables are not squeezed in a two-column layout (RHDHBUGS-3893)
+- Updated dependencies [10e954f]
+  - @red-hat-developer-hub/backstage-plugin-app-react@1.12.0
+
+## 1.11.0
+
+### Minor Changes
+
+- edc7eae: Add an app layout module that provides BUI routing and analytics context around routed application content and hosts the extensible application drawer.
+
+### Patch Changes
+
+- Updated dependencies [edc7eae]
+  - @red-hat-developer-hub/backstage-plugin-app-react@1.11.0
+
+## 1.10.1
+
+### Patch Changes
+
+- 216cda2: Register the custom catalog header as a dynamic frontend module and provide Backstage UI routing context for its entity tabs.
+- Updated dependencies [216cda2]
+  - @red-hat-developer-hub/backstage-plugin-app-react@1.10.1
+
+## 1.10.0
+
+### Minor Changes
+
+- f0fca0b: Localize the page header title, tabs and breadcrumbs rendered by `PageBlueprint` / `SubPageBlueprint` (e.g. Settings, Scaffolder, DevTools). The app-defaults module now replaces the `core-page-layout` swappable component with a localized page layout, and the app-react translations gain a `pageTabs` namespace covering known Backstage sub-page tab titles.
+
+### Patch Changes
+
+- Updated dependencies [f0fca0b]
+  - @red-hat-developer-hub/backstage-plugin-app-react@1.10.0
+
+## 1.9.1
+
+### Patch Changes
+
+- 39a2a05: Inline sidebar item and group definitions in the exported Config interface so the package schema has a single top-level declaration.
+  - @red-hat-developer-hub/backstage-plugin-app-react@1.9.1
+
+## 1.9.0
+
+### Minor Changes
+
+- 376fb61: Sidebar items and groups can now be declared in `app-config.yaml` under `app.sidebar.items` and `app.sidebar.groups`. This is the primary way to add remote links and other simple entries without writing a plugin: they accept the same fields as `SidebarItemBlueprint` and `SidebarItemGroupBlueprint` (config items require a `to` link), are merged with the contributed extensions and ordered together by `priority`, and a configured group reusing the `id` of a contributed group (for example `admin`) overrides it.
+
+  The same entries can also be split by plugin under `app.sidebar.plugins.<pluginName>`; all of them are flattened into one list. This form is primarily meant for the RHDH dynamic plugin configuration, where each plugin ships its own app-config fragment and arrays would otherwise overwrite each other, and it is used to ship sidebar defaults with some plugins such as the RBAC entry.
+
+  For advanced use cases — action items with `onClick`, entries with their own React component, spacers and dividers, or entries a plugin ships together with its pages — use the sidebar blueprints from `@red-hat-developer-hub/backstage-plugin-app-react` instead.
+
+### Patch Changes
+
+- @red-hat-developer-hub/backstage-plugin-app-react@1.9.0
+
+## 1.8.1
+
+### Patch Changes
+
+- f5f0d02: Updated translations for RHDH 2.1 (s3297).
+  - @red-hat-developer-hub/backstage-plugin-app-react@1.8.1
+
+## 1.8.0
+
+### Minor Changes
+
+- 379ab12: Localize sidebar item titles via a new `pages` translation namespace (looked up by English label), relabel Create as Self-Service, and drop the dedicated Learning Paths sidebar item so it uses the shared pages i18n.
+- d3313f9: When `appDefaultsFeatureLoader` (or the catalog / catalog-graph / api-docs plugin overrides) is enabled, NFS catalog entity pages match legacy RHDH: info cards on the left on Overview, Dependencies and System Diagram tabs, split relations graphs, and no API Definition card on Overview.
+
+  Override or disable individual extensions in `app.extensions` as needed — see README **Catalog entity pages (NFS)**.
+
+### Patch Changes
+
+- Updated dependencies [379ab12]
+  - @red-hat-developer-hub/backstage-plugin-app-react@1.8.0
+
 ## 1.7.0
 
 ### Minor Changes

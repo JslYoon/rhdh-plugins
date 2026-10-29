@@ -17,12 +17,11 @@
 import { createApp } from '@backstage/frontend-defaults';
 import authPlugin from '@backstage/plugin-auth';
 import { appDrawerModule } from '@red-hat-developer-hub/backstage-plugin-app-react';
-import {
-  intelligentAssistantFABModule,
+import intelligentAssistantFABModule, {
   intelligentAssistantRedirectModule,
-  intelligentAssistantTranslationsModule,
-} from '@red-hat-developer-hub/backstage-plugin-intelligent-assistant';
-import { rhdhThemeModule } from '@red-hat-developer-hub/backstage-plugin-theme/alpha';
+} from '@red-hat-developer-hub/backstage-plugin-intelligent-assistant/intelligent-assistant-fab-module';
+import intelligentAssistantTranslationsModule from '@red-hat-developer-hub/backstage-plugin-intelligent-assistant/intelligent-assistant-translations-module';
+import rhdhThemeModule from '@red-hat-developer-hub/backstage-plugin-theme';
 
 import { navModule } from './modules/nav';
 import { signInModule } from './modules/signIn';

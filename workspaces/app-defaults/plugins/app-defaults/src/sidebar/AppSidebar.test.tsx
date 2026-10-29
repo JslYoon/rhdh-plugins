@@ -20,8 +20,20 @@ import type {
   NavContentNavItem,
   NavContentNavItems,
 } from '@backstage/plugin-app-react';
+import { usePermission } from '@backstage/plugin-permission-react';
 
 import { AppSidebar } from './AppSidebar';
+
+jest.mock('@backstage/plugin-permission-react', () => ({
+  ...jest.requireActual('@backstage/plugin-permission-react'),
+  usePermission: jest.fn(),
+}));
+
+const mockUsePermission = usePermission as jest.Mock;
+
+beforeEach(() => {
+  mockUsePermission.mockReturnValue({ loading: false, allowed: true });
+});
 
 const navItems = (items: NavContentNavItem[]): NavContentNavItems => ({
   take: () => undefined,
@@ -234,6 +246,224 @@ describe('AppSidebar', () => {
     );
 
     const links = screen.getAllByRole('link');
+    // Chat (priority 1) stays chrome; Catalog inherits OFS priority in top.
     expect(links.map(l => l.textContent)).toEqual(['Chat', 'Catalog']);
+  });
+
+  it('merges items and groups from app.sidebar config', async () => {
+    await renderInTestApp(
+      <AppSidebar
+        items={[
+          { id: 'chat', title: 'Chat', to: '/chat', priority: 5 },
+          { id: 'users', title: 'Users', to: '/admin/users', group: 'admin' },
+        ]}
+        groups={[{ id: 'admin', title: 'Administration', priority: -10 }]}
+      />,
+      {
+        config: {
+          app: {
+            sidebar: {
+              items: [
+                { title: 'Docs', to: 'https://example.com/docs', priority: 10 },
+                { title: 'Audit log', to: '/audit-log', group: 'admin' },
+                { title: 'Grafana', to: '/grafana', group: 'tools' },
+              ],
+              groups: [
+                { id: 'tools', title: 'Tools', priority: -5 },
+                { id: 'admin', title: 'Admin area', priority: -10 },
+              ],
+              plugins: {
+                'my-plugin': {
+                  items: [{ title: 'Plugin page', to: '/plugin', priority: 7 }],
+                },
+              },
+            },
+          },
+        },
+      },
+    );
+
+    // Config (top-level and per-plugin) and contributed entries are ordered
+    // together by priority.
+    const nav = screen.getByRole('navigation');
+    const texts = Array.from(nav.querySelectorAll('a, button')).map(
+      el => el.textContent,
+    );
+    expect(texts).toEqual([
+      'Docs',
+      'Plugin page',
+      'Chat',
+      'Tools',
+      'Admin area',
+    ]);
+
+    // A config item joins a contributed group, a config group with the same
+    // id as a contributed group replaces it.
+    expect(screen.queryByText('Administration')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Admin area/ }));
+    expect(screen.getByRole('link', { name: /Audit log/ })).toHaveAttribute(
+      'href',
+      '/audit-log',
+    );
+    expect(screen.getByRole('link', { name: /Users/ })).toHaveAttribute(
+      'href',
+      '/admin/users',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /Tools/ }));
+    expect(screen.getByRole('link', { name: /Grafana/ })).toHaveAttribute(
+      'href',
+      '/grafana',
+    );
+  });
+
+  it('hides Administration when the user lacks admin permission', async () => {
+    mockUsePermission.mockReturnValue({ loading: false, allowed: false });
+    await renderInTestApp(
+      <AppSidebar
+        items={[
+          { id: 'users', title: 'Users', to: '/admin/users', group: 'admin' },
+          { id: 'catalog', title: 'Catalog', to: '/catalog' },
+        ]}
+        groups={[{ id: 'admin', title: 'Administration' }]}
+      />,
+    );
+
+    expect(screen.getByRole('link', { name: /Catalog/ })).toBeInTheDocument();
+    expect(screen.queryByText('Administration')).not.toBeInTheDocument();
+  });
+
+  it('hides Settings by default when the global header is present', async () => {
+    const header = document.createElement('nav');
+    header.id = 'global-header';
+    document.body.appendChild(header);
+    try {
+      await renderInTestApp(
+        <AppSidebar
+          items={[{ id: 'catalog', title: 'Catalog', to: '/catalog' }]}
+          groups={[
+            {
+              id: 'settings',
+              title: 'Settings',
+              to: '/settings',
+              priority: -1,
+            },
+          ]}
+        />,
+      );
+
+      expect(screen.getByRole('link', { name: /Catalog/ })).toBeInTheDocument();
+      expect(screen.queryByText('Settings')).not.toBeInTheDocument();
+    } finally {
+      header.remove();
+    }
+  });
+
+  it('shows Settings despite the global header when app.sidebar.settings is true', async () => {
+    const header = document.createElement('nav');
+    header.id = 'global-header';
+    document.body.appendChild(header);
+    try {
+      await renderInTestApp(
+        <AppSidebar
+          items={[{ id: 'catalog', title: 'Catalog', to: '/catalog' }]}
+          groups={[
+            {
+              id: 'settings',
+              title: 'Settings',
+              to: '/settings',
+              priority: -1,
+            },
+          ]}
+        />,
+        { config: { app: { sidebar: { settings: true } } } },
+      );
+
+      expect(screen.getByRole('link', { name: /Settings/ })).toHaveAttribute(
+        'href',
+        '/settings',
+      );
+    } finally {
+      header.remove();
+    }
+  });
+
+  it('hides the company logo by default when the global header is present', async () => {
+    const Logo = () => <div data-testid="company-logo">Logo</div>;
+    const header = document.createElement('nav');
+    header.id = 'global-header';
+    document.body.appendChild(header);
+    try {
+      await renderInTestApp(
+        <AppSidebar
+          items={[{ id: 'catalog', title: 'Catalog', to: '/catalog' }]}
+          groups={[]}
+          elements={[
+            {
+              id: 'sidebar-element:app/logo',
+              component: Logo,
+              priority: 2000,
+            },
+          ]}
+        />,
+      );
+
+      expect(screen.queryByTestId('company-logo')).not.toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /Catalog/ })).toBeInTheDocument();
+    } finally {
+      header.remove();
+    }
+  });
+
+  it('shows the company logo despite the global header when app.sidebar.logo is true', async () => {
+    const Logo = () => <div data-testid="company-logo">Logo</div>;
+    const header = document.createElement('nav');
+    header.id = 'global-header';
+    document.body.appendChild(header);
+    try {
+      await renderInTestApp(
+        <AppSidebar
+          items={[{ id: 'catalog', title: 'Catalog', to: '/catalog' }]}
+          groups={[]}
+          elements={[
+            {
+              id: 'sidebar-element:app/logo',
+              component: Logo,
+              priority: 2000,
+            },
+          ]}
+        />,
+        { config: { app: { sidebar: { logo: true } } } },
+      );
+
+      expect(screen.getByTestId('company-logo')).toBeInTheDocument();
+    } finally {
+      header.remove();
+    }
+  });
+
+  it('inserts a divider only when the middle section has entries', async () => {
+    const { unmount } = await renderInTestApp(
+      <AppSidebar
+        items={[
+          { id: 'catalog', title: 'Catalog', to: '/catalog' },
+          { id: 'radar', title: 'Tech Radar', to: '/tech-radar' },
+        ]}
+        groups={[]}
+      />,
+    );
+
+    expect(document.querySelectorAll('hr').length).toBeGreaterThan(0);
+    unmount();
+
+    await renderInTestApp(
+      <AppSidebar
+        items={[{ id: 'catalog', title: 'Catalog', to: '/catalog' }]}
+        groups={[]}
+      />,
+    );
+
+    // No middle section and no bottom section → no section dividers.
+    expect(document.querySelectorAll('hr')).toHaveLength(0);
   });
 });

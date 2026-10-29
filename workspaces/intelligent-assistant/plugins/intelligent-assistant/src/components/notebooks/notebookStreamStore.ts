@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-import { MessageProps } from '@patternfly/chatbot';
+import type { MessageProps } from '@patternfly/chatbot';
 
 import { TEMP_CONVERSATION_ID } from '../../const';
 import {
@@ -29,7 +29,7 @@ import {
   getTimestamp,
   normalizeChatUserInput,
   transformDocumentsToSources,
-} from '../../utils/lightspeed-chatbox-utils';
+} from '../../utils/lightspeed-chatbox-message-utils';
 import queryClient from '../../utils/queryClient';
 import {
   applyToolResultToToolCalls,
@@ -224,7 +224,10 @@ export function createNotebookStreamStore(): NotebookStreamStore {
 
         const { value, done } = await reader.read();
         if (isStale()) return;
-        if (done) break;
+        if (done) {
+          buffer += decoder.decode();
+          break;
+        }
 
         buffer += decoder.decode(value, { stream: true });
         const { events: parsedEvents, remainder } = parseSSEBuffer(buffer);
@@ -329,6 +332,23 @@ export function createNotebookStreamStore(): NotebookStreamStore {
           }
         }
         if (streamEnded) break;
+      }
+
+      const trailing = buffer.trim();
+      if (trailing) {
+        const { events: trailingEvents } = parseSSEBuffer(`${trailing}\n\n`);
+        for (const { event, data } of trailingEvents) {
+          if (event === 'end') {
+            const documents = data?.referenced_documents || [];
+            const sources = transformDocumentsToSources(documents);
+            updateLast(last => ({
+              ...last,
+              isLoading: false,
+              ...(sources ? { sources } : {}),
+            }));
+            commit('streaming');
+          }
+        }
       }
     } catch (e: any) {
       if (isStale()) return;

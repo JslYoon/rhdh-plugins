@@ -17,8 +17,6 @@
 import Box from '@mui/material/Box';
 import Drawer from '@mui/material/Drawer';
 
-import { ThemeConfig } from '@red-hat-developer-hub/backstage-plugin-theme';
-
 /**
  * @internal
  */
@@ -39,9 +37,11 @@ export type CustomDrawerProps = {
 export const CustomDrawer = (props: CustomDrawerProps) => {
   const {
     children,
+    // Defaults align with PatternFly Chatbot (30rem ≈ 480px); callers usually
+    // pass drawerWidth from Lightspeed provider / AppDrawer defaultWidth.
     minWidth = 400,
     maxWidth = 800,
-    initialWidth = 400,
+    initialWidth = 480,
     isDrawerOpen,
     drawerWidth,
     onWidthChange,
@@ -59,13 +59,9 @@ export const CustomDrawer = (props: CustomDrawerProps) => {
         '& .v5-MuiDrawer-paper': {
           width: drawerWidth || initialWidth,
           boxSizing: 'border-box',
-          backgroundColor: theme => {
-            const themeConfig = theme as ThemeConfig;
-            return (
-              themeConfig.palette?.rhdh?.general?.sidebarBackgroundColor ||
-              theme.palette.background.paper
-            );
-          },
+          // Match overlay ChatbotModal (floating-secondary / #151515 dark).
+          backgroundColor:
+            'var(--pf-t--global--background--color--floating--secondary--default)',
           justifyContent: 'space-between',
         },
         // Only apply header offset when global header exists

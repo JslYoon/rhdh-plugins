@@ -15,9 +15,9 @@
  */
 
 import { screen, fireEvent, waitFor } from '@testing-library/react';
-import { TestApiProvider, renderInTestApp } from '@backstage/test-utils';
+import { renderInTestApp } from '@backstage/test-utils';
 import type { Agent } from '@red-hat-developer-hub/backstage-plugin-dcm-common';
-import { agentsApiRef, catalogApiRef } from '../../apis';
+import { DcmClientsTestProvider } from '../../api/DcmClientsContext';
 import { AgentsTabContent } from './AgentsTabContent';
 
 jest.mock('../../hooks/useTranslation', () => {
@@ -74,14 +74,11 @@ async function renderAgentsTab(
   apis: ReturnType<typeof buildApis> = buildApis(),
 ) {
   return renderInTestApp(
-    <TestApiProvider
-      apis={[
-        [agentsApiRef, apis.agents],
-        [catalogApiRef, apis.catalog],
-      ]}
+    <DcmClientsTestProvider
+      clients={{ agentsApi: apis.agents, catalogApi: apis.catalog }}
     >
       <AgentsTabContent />
-    </TestApiProvider>,
+    </DcmClientsTestProvider>,
   );
 }
 
@@ -273,6 +270,35 @@ describe('AgentsTabContent', () => {
         expect(listAgents).toHaveBeenCalledWith(
           expect.not.objectContaining({ health_status: expect.anything() }),
         ),
+      );
+    });
+
+    it('displays translated "All" label when no filter is selected', async () => {
+      await renderAgentsTab();
+
+      await waitFor(() =>
+        expect(screen.getByText('env-agent-west-1')).toBeInTheDocument(),
+      );
+
+      expect(screen.getByText('All')).toBeInTheDocument();
+    });
+
+    it('displays the selected option label after choosing a filter', async () => {
+      const listAgents = jest
+        .fn()
+        .mockResolvedValue({ agents: [MOCK_AGENT], next_page_token: '' });
+      const apis = buildApis({ listAgents });
+      await renderAgentsTab(apis);
+
+      await waitFor(() => expect(listAgents).toHaveBeenCalledTimes(1));
+
+      const filterInput = document.querySelector(
+        '[data-testid="health-filter"]',
+      ) as HTMLInputElement;
+      fireEvent.change(filterInput, { target: { value: 'ready' } });
+
+      await waitFor(() =>
+        expect(screen.getByText('Ready')).toBeInTheDocument(),
       );
     });
   });

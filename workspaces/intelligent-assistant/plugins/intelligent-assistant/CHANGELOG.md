@@ -1,5 +1,107 @@
 # @red-hat-developer-hub/backstage-plugin-intelligent-assistant
 
+## 5.3.10
+
+### Patch Changes
+
+- eb4614c: Pin Adobe Spectrum, React Aria, and React Stately dependencies to consistent versions for dynamic plugin exports.
+  - @red-hat-developer-hub/backstage-plugin-intelligent-assistant-common@5.3.10
+
+## 5.3.9
+
+### Patch Changes
+
+- 8f47f98: Pin the frontend plugin dependencies `@adobe/react-spectrum` to `3.47.1`, `react-aria` to `3.49.0`, and `react-stately` to `3.47.0`.
+- 102547a: Updated dependency `msw` to `2.15.0`.
+  Updated dependency `@red-hat-developer-hub/backstage-plugin-theme` to `^1.4.1`.
+  - @red-hat-developer-hub/backstage-plugin-intelligent-assistant-common@5.3.9
+
+## 5.3.8
+
+### Patch Changes
+
+- 50ec702: Fix overlay chat shifting to the left when Quickstart (or any docked drawer) is open by stopping a second `DOCKED_CONTENT_OFFSET` margin — horizontal position already follows the measured FAB inset.
+- 9af7ab5: Fix docked/overlay clipping by clearing PatternFly drawer min-width in the compact shell and overlaying chat history and notebook documents panels. Isolate chat stacking so those overlays no longer block the dock width resizer.
+- 50ec702: Fix Intelligent Assistant fullscreen page to fill the RHDH content well with matching shell corners, and keep the message composer and AI disclaimer footnote visible without scrolling (fill the theme SidebarPage height instead of a broken local 100vh calc; pin the chat footer and stop the history drawer from scrolling content+footer together). Also keep a solid circular FAB and avoid a short loading flash when switching from overlay/docked mode. Hide the model-selector tooltip while the menu is open so the tip does not intercept model option clicks.
+  - @red-hat-developer-hub/backstage-plugin-intelligent-assistant-common@5.3.8
+
+## 5.3.7
+
+### Patch Changes
+
+- 8a61c97: Show notebook RAG source chips as soon as the assistant response completes, without requiring a page refresh. Redirect unknown Intelligent Assistant URLs to `/intelligent-assistant` when chat is allowed, or show a 404 when it is denied. Fix overlay chat loader positioning by waiting for PatternFly CSS before mounting ChatbotModal (RHDHBUGS-3803). Scope chat rename/delete modals to the overlay/docked container so they are not clipped by the history drawer.
+- c7a4783: Fix chat attachment preview/edit by configuring Monaco with only the base editor worker, lazy-loaded when a file is opened.
+- 1d1461c: Disable MCP Enabled toggle when Status shows an error, and surface Save validation errors in organization credential mode.
+- 976be50: Raise the Intelligent Assistant FAB above typical table/list pagination so Next remains clickable.
+- 705f9a1: Updated dependency `@patternfly/chatbot` to `6.9.0-prerelease.7`.
+  Updated dependency `@patternfly/react-code-editor` to `6.6.1`.
+- 9125990: Restore the MessageBar model selector from the active conversation when switching chats, instead of always showing the last globally selected model.
+- 0753336: Ellipsize long model names and the current-page chip from available message-bar width (context chip keeps priority when both are present) and show the full name in a tooltip when truncated. The chat header selector now displays the model label instead of the raw value.
+
+  Raise the delete-conversation modal backdrop z-index so it covers the host app masthead; the header no longer stays bright while the rest of the page is dimmed.
+  - @red-hat-developer-hub/backstage-plugin-intelligent-assistant-common@5.3.7
+
+## 5.3.6
+
+### Patch Changes
+
+- @red-hat-developer-hub/backstage-plugin-intelligent-assistant-common@5.3.6
+
+## 5.3.5
+
+### Patch Changes
+
+- ab76946: Fix MUI5 style regressions: notebooks docked scroll, file chip outline border, footer divider, and document row alignment
+  - @red-hat-developer-hub/backstage-plugin-intelligent-assistant-common@5.3.5
+
+## 5.3.4
+
+### Patch Changes
+
+- 588f80f: Update README to use new `enabled` field when configuring plugins, as `disabled` is now deprecated
+- fb4ecee: Updated dependency `prettier` to `3.9.9`.
+- 262900c: Updated dependency `@patternfly/chatbot` to `6.9.0-prerelease.5`.
+- b47cbf3: Align Intelligent Assistant Chat/Notebooks shell with PatternFly defaults and fix sticky history close hover.
+- Updated dependencies [fb4ecee]
+  - @red-hat-developer-hub/backstage-plugin-intelligent-assistant-common@5.3.4
+
+## 5.3.3
+
+### Patch Changes
+
+- 377efe3: Updated dependency `@patternfly/chatbot` to `6.9.0-prerelease.4`.
+  Updated dependency `@patternfly/react-core` to `6.6.1`.
+- a669321: Updated dependency `@testing-library/user-event` to `14.6.7`.
+  - @red-hat-developer-hub/backstage-plugin-intelligent-assistant-common@5.3.3
+
+## 5.3.2
+
+### Patch Changes
+
+- f5f0d02: Updated translations for RHDH 2.1 (s3297).
+  - @red-hat-developer-hub/backstage-plugin-intelligent-assistant-common@5.3.2
+
+## 5.3.1
+
+### Patch Changes
+
+- 9dc3351: Split Module Federation entry points and lazy-load chat UI so NFS, FAB, and translations remotes ship minimal synchronous bundles.
+  - @red-hat-developer-hub/backstage-plugin-intelligent-assistant-common@5.3.1
+
+## 5.3.0
+
+### Minor Changes
+
+- 0f9a3e8: Add screen context UX: kebab opt-in, context chip (recording/paused/unavailable), and gated DOM and screenshot attachments on send per RHIDP-14319.
+
+### Patch Changes
+
+- 2bebbeb: Updated dependency `prettier` to `3.9.8`.
+- 22ab37c: Updated dependency `prettier` to `3.9.7`.
+- Updated dependencies [2bebbeb]
+- Updated dependencies [22ab37c]
+  - @red-hat-developer-hub/backstage-plugin-intelligent-assistant-common@5.3.0
+
 ## 5.2.0
 
 ### Minor Changes
